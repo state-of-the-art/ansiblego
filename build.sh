@@ -12,11 +12,11 @@ suffixes="linux-amd64 linux-arm64 windows-amd64 darwin-amd64 darwin-arm64"
 # Running static code checks
 ./check.sh
 
-#for suffix in $suffixes; do
-#    echo "--> Build binary for ${suffix}"
-#    GOOS="$(echo "${suffix}" | cut -d- -f1)" GOARCH="$(echo "${suffix}" | cut -d- -f2)" \
-#        go build -ldflags="-s -w" -a -o "${name}.raw.${suffix}" "./cmd/${name}"
-#done
+for suffix in $suffixes; do
+    echo "--> Build binary for ${suffix}"
+    GOOS="$(echo "${suffix}" | cut -d- -f1)" GOARCH="$(echo "${suffix}" | cut -d- -f2)" \
+        go build -ldflags="-s -w" -a -o "${name}.raw.${suffix}" "./cmd/${name}"
+done
 
 if [ "x${PKG_SUFFIX}" != 'xraw' ] ; then
     # Pack all the executables with upx
@@ -59,4 +59,17 @@ for out_suffix in $suffixes; do
         echo "--- EMBEDDED_BINARY ${PKG_SUFFIX} ${pack_suffix} ---" >> "${out_bin}"
         cat "${pack_bin}" >> "${out_bin}"
     done
+done
+
+# Combine the sh bundle
+echo "--> Combining binaries to shell bundle"
+out_bin="${name}.out.sh.bundle"
+cp -a unix_bundle.sh.head "${out_bin}"
+chmod +x "${out_bin}"
+for pack_suffix in $suffixes; do
+    echo "-->   + ${pack_suffix}"
+    pack_bin="${name}.${PKG_SUFFIX}.${pack_suffix}"
+    echo '' >> "${out_bin}"
+    echo "--- EMBEDDED_BINARY ${PKG_SUFFIX} ${pack_suffix} ---" >> "${out_bin}"
+    cat "${pack_bin}" >> "${out_bin}"
 done

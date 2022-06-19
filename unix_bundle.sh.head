@@ -1,0 +1,112 @@
+#!/bin/sh -e
+# Unix script to run AnsibleGo on multiple Host platforms
+# which have a bundle of binaries for specific systems.
+# It detects the Unix platform, unpacks the usable binary
+# to temporary folder (if mtime > script) and executes it.
+
+# Look for self path
+self_path=$0
+exec_path="${self_path}.bin"
+if [ ! -f "$self_path" ]; then
+    # Apparently script is running from PATH
+    exec_path="/tmp/$self_path.bin"
+    self_path=$(command -v "$self_path")
+    if [ ! -f "$self_path" ]; then
+        echo "AnsibleGo: Unable to locate self path: $0"
+        exit 1
+    fi
+fi
+
+# Check if the binary already unpacked and older then script
+if [ -f "${exec_path}" -a "${self_path}" -ot "${exec_path}" ]; then
+    # Run AnsibleGo executable
+    chmod +x "$exec_path"
+    "$exec_path" "$@"
+    exit $?
+fi
+
+# Removing the old executable to recreate it
+rm -f "$exec_path"
+
+# Detect the host platform kernel and arch
+kernel=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m)
+[ "x$arch" != 'xx86_64' ] || arch=amd64
+
+# Locating all the embedded binaries
+# Notice: Match string is splitted in half to not find itself by fixed grep
+embedded_headers=$(grep -F --text --byte-offset -- '--- ''EMBEDDED_BINARY'' ' "${self_path}")
+
+# Find the main kernel-arch binary in self bundle
+while read line; do
+    offset=$(echo "$line" | cut -d: -f 1)
+    header=$(echo "$line" | cut -d: -f 2-)
+    if [ "$main_offset" ]; then
+        # main_offset is set then this line ends the main binary content
+        main_count=$(($offset - $main_offset))
+        main_count_dd_opt="count=$(($main_count-1))"
+        break
+    fi
+    if echo "$header" | grep -q -- " ${kernel}-${arch} "; then
+        # Found the main binary
+        main_offset=$(($(echo "$header" | wc -c) + $offset))
+        main_package=$(echo "$header" | cut -d' ' -f 3)
+    fi
+done <<EOF
+${embedded_headers}
+EOF
+
+# Extracting the main executable binary
+dd "if=${self_path}" "of=${exec_path}.${main_package}" bs=1M iflag=skip_bytes,count_bytes "skip=${main_offset}" ${main_count_dd_opt} 2>/dev/null
+
+if [ "${main_package}" = "xz" ]; then
+    # Unpack xz main binary
+    case "$kernel" in
+        linux)
+            # Linux needs xz-utils to be installed
+            xz -d -T0 "$exec_path.xz"
+            ;;
+        darwin)
+            # Gzip on modern MacOS can extract XZ
+            gzip -d "$exec_path.xz"
+            ;;
+        *)
+            echo "AnsibleGo: Not supported platform: ${kernel}"
+            exit 1
+            ;;
+    esac
+else
+    # Just rename to the desired exec name
+    mv "${exec_path}.${main_package}" "${exec_path}"
+fi
+
+# Attach the rest of the execs to the binary
+while read line; do
+    offset=$(echo "$line" | cut -d: -f 1)
+    header=$(echo "$line" | cut -d: -f 2-)
+    if [ "$prev_offset" ]; then
+        # This will append all the parts except for the last one
+        echo '' >> "$exec_path"
+        dd "if=${self_path}" bs=1M iflag=skip_bytes,count_bytes "skip=${prev_offset}" "count=$(($offset-$prev_offset-1))" 2>/dev/null >> "$exec_path"
+    fi
+    if echo "$header" | grep -q -- " ${kernel}-${arch} "; then
+        # If it's the main one - skipping it
+        prev_offset=""
+    else
+        prev_offset="$offset"
+    fi
+done <<EOF
+${embedded_headers}
+EOF
+# And processing the last exec if it's not the main one
+if [ "$prev_offset" ]; then
+    echo '' >> "$exec_path"
+    dd "if=${self_path}" bs=1M iflag=skip_bytes,count_bytes "skip=${prev_offset}" 2>/dev/null >> "$exec_path"
+fi
+
+# Run AnsibleGo executable
+chmod +x "$exec_path"
+"$exec_path" "$@"
+exit $?
+
+# Rest of the file contains embedded AnsibleGo binaries attached during the build

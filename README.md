@@ -18,8 +18,8 @@ To address the main Ansible pain-points the AnsibleGo have the next features:
 * One executable binary
    > Simple to install by just copying to the target system.
 * No external dependencies
-   > Especially important for the minimal environments. In Ansible that was solved by standalone
-   > python but pip again needed to make some larger footprint which is not ideal.
+   > Especially important for the minimal environments. In Ansible that could be partially solved
+   > by standalone python but pip again is needed makes a larger footprint which is not ideal.
 * Built-in support for SSH and WinRM transports
    > No need to install additional dependencies - it works out of the box to cover the majority of
    > the potential targets.
@@ -51,8 +51,8 @@ for simplicity based on the received experience with implementing the Ansible pl
    * The build script is separated and just packs/combines the built binaries
    * Supports XZ and UPX (which have it's own issues) packing for binaries to reduce exec size
    * It seems combined execs are working well on Linux, MacOS and Windows
+   * Unix executable based on sh script for Mac/Linux hosts
    * TODO: Prepare the extractor of the needed arch from binary
-   * TODO: Unix executable based on sh script for Mac/Linux hosts
 * Modules plugins via scripting
    * Can embed them
    * Can run various functions with native interface

@@ -21,7 +21,7 @@ func main() {
 	cmd := &cobra.Command{
 		Use:   "ansiblego",
 		Short: "AnsibleGo simple image config management",
-		Long:  `The simple replacement for ansible to build images purpose`,
+		Long:  `The simple replacement for ansible to build images`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log.Println("AnsibleGo running...")
 
