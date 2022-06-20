@@ -47,10 +47,10 @@ while read line; do
         main_count_dd_opt="count=$(($main_count-1))"
         break
     fi
-    if echo "$header" | grep -q -- " ${kernel}-${arch} "; then
+    if echo "$header" | cut -d' ' -f 3 | grep -q -- "${kernel}-${arch}"; then
         # Found the main binary
         main_offset=$(($(echo "$header" | wc -c) + $offset))
-        main_package=$(echo "$header" | cut -d' ' -f 3)
+        main_package=$(echo "$header" | cut -d' ' -f 4)
     fi
 done <<EOF
 ${embedded_headers}
@@ -59,7 +59,7 @@ EOF
 # Extracting the main executable binary
 dd "if=${self_path}" "of=${exec_path}.${main_package}" bs=1M iflag=skip_bytes,count_bytes "skip=${main_offset}" ${main_count_dd_opt} 2>/dev/null
 
-if [ "${main_package}" = "xz" ]; then
+if [ "x${main_package}" = "xxz" ]; then
     # Unpack xz main binary
     case "$kernel" in
         linux)
@@ -89,7 +89,7 @@ while read line; do
         echo '' >> "$exec_path"
         dd "if=${self_path}" bs=1M iflag=skip_bytes,count_bytes "skip=${prev_offset}" "count=$(($offset-$prev_offset-1))" 2>/dev/null >> "$exec_path"
     fi
-    if echo "$header" | grep -q -- " ${kernel}-${arch} "; then
+    if echo "$header" | cut -d' ' -f 3 | grep -q -- "${kernel}-${arch}"; then
         # If it's the main one - skipping it
         prev_offset=""
     else

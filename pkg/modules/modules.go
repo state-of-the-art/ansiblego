@@ -2,7 +2,6 @@ package modules
 
 import (
 	"embed"
-	"log"
 	"path"
 )
 
@@ -24,7 +23,11 @@ func InitEmbedded() {
 			modules_cache[path.Join(mtype.Name(), name)] = nil
 		}
 	}
-	log.Println("Embedded modules:", len(modules_cache))
+	// TODO: Enable in debug mode
+	//log.Println("Embedded modules:", len(modules_cache))
+	//for k, _ := range modules_cache {
+	//	log.Println(" ", k)
+	//}
 }
 
 // Checks if the module is available

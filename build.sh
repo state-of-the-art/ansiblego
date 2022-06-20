@@ -56,7 +56,7 @@ for out_suffix in $suffixes; do
         echo "-->   + ${pack_suffix}"
         pack_bin="${name}.${PKG_SUFFIX}.${pack_suffix}"
         echo '' >> "${out_bin}"
-        echo "--- EMBEDDED_BINARY ${PKG_SUFFIX} ${pack_suffix} ---" >> "${out_bin}"
+        echo "--- EMBEDDED_BINARY ${pack_suffix} ${PKG_SUFFIX} ---" >> "${out_bin}"
         cat "${pack_bin}" >> "${out_bin}"
     done
 done
@@ -70,6 +70,6 @@ for pack_suffix in $suffixes; do
     echo "-->   + ${pack_suffix}"
     pack_bin="${name}.${PKG_SUFFIX}.${pack_suffix}"
     echo '' >> "${out_bin}"
-    echo "--- EMBEDDED_BINARY ${PKG_SUFFIX} ${pack_suffix} ---" >> "${out_bin}"
+    echo "--- EMBEDDED_BINARY ${pack_suffix} ${PKG_SUFFIX} ---" >> "${out_bin}"
     cat "${pack_bin}" >> "${out_bin}"
 done

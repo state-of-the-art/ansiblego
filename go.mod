@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/cosmos72/gomacro v0.0.0-20220617213951-19e4ba4e0ca3
 	github.com/spf13/cobra v1.4.0
+	github.com/ulikunitz/xz v0.5.10
 	gopkg.in/yaml.v3 v3.0.1
 )
 

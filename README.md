@@ -52,7 +52,7 @@ for simplicity based on the received experience with implementing the Ansible pl
    * Supports XZ and UPX (which have it's own issues) packing for binaries to reduce exec size
    * It seems combined execs are working well on Linux, MacOS and Windows
    * Unix executable based on sh script for Mac/Linux hosts
-   * TODO: Prepare the extractor of the needed arch from binary
+   * Prepare the extractor of the needed arch from binary
 * Modules plugins via scripting
    * Can embed them
    * Can run various functions with native interface
