@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/ulikunitz/xz"
@@ -36,6 +37,8 @@ const (
 )
 
 // Will return the found embedded binary or empty array
+// TODO: not a great implementation since need to store data
+// in memory, but could be optimized later when will be used
 func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
 	exec_path, err := os.Executable()
 	if err != nil {
@@ -49,19 +52,54 @@ func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
 	}
 	defer exec_file.Close()
 
-	// Locating the required section from the bottom of the executable
-	// with overlapping buffers to not miss the token in binary file
 	buf := make([]byte, 8192)
 	token := []byte(TOKEN_PT1 + TOKEN_PT2)
-	read_jump := int64(len(buf) - len(token))
 
+	// Special case if the needed kernel/arch is the same as runtime
+	if runtime.GOOS == kernel && runtime.GOARCH == arch {
+		// Scanning for token and copying the buffer to output
+		var out []byte
+		for {
+			length, err := exec_file.Read(buf)
+			if err == io.EOF {
+				// We reached the end of the file so stop here
+				break
+			} else if err != nil {
+				return nil, fmt.Errorf("Unable to read bytes: %v", err)
+			}
+			out = append(out, buf[:length]...)
+
+			// Checking the last added data for token keeping in mind a possible overlap
+			sniff_start := len(out) - len(buf) - len(token)
+			if sniff_start < 0 {
+				sniff_start = 0
+			}
+			token_pos := bytes.Index(out[sniff_start:], token)
+			if token_pos < 0 {
+				// No token found so continue
+				continue
+			}
+
+			// We found the token so can cut the out and break the loop
+			out = out[:sniff_start+token_pos]
+			break
+		}
+		return out, nil
+	}
+
+	// Locating the required section from the bottom of the executable
+	// with overlapping buffers to not miss the token in binary file.
+	// Reading it from the bottom is discussable, because basically we
+	// need to reread the parsed section again, but we skipping ~30MB
+	// of current executable and that could worth it.
 	var header_fields []string // The header content separated by space
 	var binary_start int64     // Where to start reading of the embedded binary
 	binary_end, err := exec_file.Seek(0, os.SEEK_END)
-
 	if err != nil {
 		return nil, fmt.Errorf("Unable to get file size: %v", err)
 	}
+
+	read_jump := int64(len(buf) - len(token))
 	for i := binary_end - int64(len(buf)); i > 0; i -= read_jump {
 		file_pos, err := exec_file.Seek(i, os.SEEK_SET)
 		if err != nil {
