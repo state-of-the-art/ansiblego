@@ -4,6 +4,16 @@
 # It detects the Unix platform, unpacks the usable binary
 # to temporary folder (if mtime > script) and executes it.
 
+ddFunc() {
+    # Substitute for dd to avoid slow ibs=1 on BSD systems
+    # $1 - src, $2 - offset, $3 - count (optional)
+    if [ "x$3" != "x" ]; then
+        tail "-c+$(($2+1))" "$1" | head "-c$3"
+    else
+        tail "-c+$(($2+1))" "$1"
+    fi
+}
+
 # Look for self path
 self_path=$0
 exec_path="${self_path}.bin"
@@ -43,8 +53,7 @@ while read line; do
     header=$(echo "$line" | cut -d: -f 2-)
     if [ "$main_offset" ]; then
         # main_offset is set then this line ends the main binary content
-        main_count=$(($offset - $main_offset))
-        main_count_dd_opt="count=$(($main_count-1))"
+        main_count=$(($offset - $main_offset - 1))
         break
     fi
     if echo "$header" | cut -d' ' -f 3 | grep -q -- "${kernel}-${arch}"; then
@@ -56,8 +65,8 @@ done <<EOF
 ${embedded_headers}
 EOF
 
-# Extracting the main executable binary
-dd "if=${self_path}" "of=${exec_path}.${main_package}" bs=1M iflag=skip_bytes,count_bytes "skip=${main_offset}" ${main_count_dd_opt} 2>/dev/null
+# Extracting the main executable binary (dd is limited by BSD implementation)
+ddFunc "${self_path}" "${main_offset}" "${main_count}" > "${exec_path}.${main_package}"
 
 if [ "x${main_package}" = "xxz" ]; then
     # Unpack xz main binary
@@ -90,11 +99,11 @@ while read line; do
     if [ "$prev_offset" ]; then
         # This will append all the parts except for the last one
         echo '' >> "$exec_path"
-        dd "if=${self_path}" bs=1M iflag=skip_bytes,count_bytes "skip=${prev_offset}" "count=$(($offset-$prev_offset-1))" 2>/dev/null >> "$exec_path"
+        ddFunc "${self_path}" "${prev_offset}" "$(($offset-$prev_offset-1))" >> "$exec_path"
     fi
     if echo "$header" | cut -d' ' -f 3 | grep -q -- "${kernel}-${arch}"; then
         # If it's the main one - skipping it
-        prev_offset=""
+        prev_offset=''
     else
         prev_offset="$offset"
     fi
@@ -104,7 +113,7 @@ EOF
 # And processing the last exec if it's not the main one
 if [ "$prev_offset" ]; then
     echo '' >> "$exec_path"
-    dd "if=${self_path}" bs=1M iflag=skip_bytes,count_bytes "skip=${prev_offset}" 2>/dev/null >> "$exec_path"
+    ddFunc "${self_path}" "${prev_offset}" >> "$exec_path"
 fi
 
 # Run AnsibleGo executable
