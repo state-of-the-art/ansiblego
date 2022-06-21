@@ -1,10 +1,11 @@
 #!/bin/sh -e
 # Pack and creates multibinary executables
 
-# TODO: Using xz for now due to it's not working on macos
+# TODO: Using gz for now due to upx isn't working on macos
 # as expected and seems related to the code signature issues.
-# You can set it to 'raw' and 'upx' too
-[ "x${PKG_SUFFIX}" != 'x' ] || PKG_SUFFIX='xz'  # To use general xz archiver
+# GZ is used due to it's speed, compatibility and quite small binary size.
+# You can set it to 'raw', 'upx' or 'xz' too
+[ "x${PKG_SUFFIX}" != 'x' ] || PKG_SUFFIX='gz'  # To use general xz archiver
 
 name=ansiblego
 suffixes="linux-amd64 linux-arm64 windows-amd64 darwin-amd64 darwin-arm64"
@@ -30,7 +31,10 @@ if [ "x${PKG_SUFFIX}" != 'xraw' ] ; then
                 upx --brute -q -9 -o "${out_name}" "${bin_name}" &
             elif [ "x${PKG_SUFFIX}" = 'xxz' ] ; then
                 echo "--> XZ pack binary for ${exec_suffix}"
-                xz -z -e9 -T 20 -c "${bin_name}" > "${out_name}" &
+                xz -z -9e -T0 -c "${bin_name}" > "${out_name}" &
+            elif [ "x${PKG_SUFFIX}" = 'xgz' ] ; then
+                echo "--> Gzip pack binary for ${exec_suffix}"
+                gzip -9 -c "${bin_name}" > "${out_name}" &
             fi
         fi
     done
@@ -43,11 +47,12 @@ for out_suffix in $suffixes; do
     echo "--> Combining binaries for ${out_suffix}"
     out_bin="${name}.out.${out_suffix}"
     [ "x$(echo "${out_suffix}" | cut -d- -f1)" != "xwindows" ] || out_bin="${out_bin}.exe"
-    if [ "x${PKG_SUFFIX}" = 'xxz' ] ; then
-        # We can't use xz binary as the host one
-        cp -a "${name}.raw.${out_suffix}" "${out_bin}"
-    else
+    if [ "x${PKG_SUFFIX}" = 'xraw' -o "x${PKG_SUFFIX}" = 'xupx' ] ; then
+        # RAW and UPX can be used as is
         cp -a "${name}.${PKG_SUFFIX}.${out_suffix}" "${out_bin}"
+    else
+        # We can't use xz/gz binary as the host one
+        cp -a "${name}.raw.${out_suffix}" "${out_bin}"
     fi
 
     # Combine with the rest of the archs

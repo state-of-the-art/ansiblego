@@ -2,6 +2,7 @@ package embedbin
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -21,9 +22,10 @@ import (
 //     - amd64
 //     - arm64
 //   package:
-//     - raw
-//     - upx
-//     - xz
+//     - raw (linux-amd64: 31M)
+//     - upx (linux-amd64: 8.4M)
+//     - gz (linux-amd64: 11M)
+//     - xz (linux-amd64: 7.8M)
 
 const (
 	// Token is split in 2 parts to not find it accidentally
@@ -123,6 +125,12 @@ func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
 	switch header_fields[1] {
 	case "raw", "upx":
 		return io.ReadAll(reader)
+	case "gz":
+		r, err := gzip.NewReader(reader)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to create Gzip reader: %v", err)
+		}
+		return io.ReadAll(r)
 	case "xz":
 		r, err := xz.NewReader(reader)
 		if err != nil {

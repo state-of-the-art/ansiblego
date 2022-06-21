@@ -49,7 +49,7 @@ for simplicity based on the received experience with implementing the Ansible pl
 
 * Multiarch executable
    * The build script is separated and just packs/combines the built binaries
-   * Supports XZ and UPX (which have it's own issues) packing for binaries to reduce exec size
+   * Supports GZ, XZ and UPX (which have it's own issues) packing for binaries to reduce exec size
    * It seems combined execs are working well on Linux, MacOS and Windows
    * Unix executable based on sh script for Mac/Linux hosts
    * Prepare the extractor of the needed arch from binary

@@ -75,6 +75,9 @@ if [ "x${main_package}" = "xxz" ]; then
             exit 1
             ;;
     esac
+elif [ "x${main_package}" = "xgz" ]; then
+    # Unpack gz main binary
+    gzip -d "$exec_path.gz"
 else
     # Just rename to the desired exec name
     mv "${exec_path}.${main_package}" "${exec_path}"
