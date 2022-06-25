@@ -52,7 +52,6 @@ func (tr *TransportWinRM) Execute(cmd string, stdout, stderr io.Writer) (err err
 
 // A bit adjusted function from https://github.com/jbrekelmans/go-winrm/blob/master/copier.go
 func (tr *TransportWinRM) Copy(content io.Reader, dst string, mode os.FileMode) error {
-	// Uses the usual chunk-based approach, while could be optimized
-	// TODO: through PSRP or https://github.com/jbrekelmans/go-winrm
-	return doCopy(tr.client, 10, 512, content, dst)
+	wcp := NewWinRMCP(tr.client, 1)
+	return wcp.Copy(content, dst)
 }
