@@ -3,11 +3,14 @@ package core
 import (
 	"log"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 	"github.com/state-of-the-art/ansiblego/pkg/embedbin"
 	"github.com/state-of-the-art/ansiblego/pkg/modules"
+	"github.com/state-of-the-art/ansiblego/pkg/transport/ssh"
+	"github.com/state-of-the-art/ansiblego/pkg/transport/winrm"
 )
 
 type AnsibleGo struct {
@@ -33,6 +36,7 @@ func (ag *AnsibleGo) Init() error {
 
 	modules.InitEmbedded()
 
+	// Playbook test
 	if ag.cfg.Mode == "playbook" {
 		log.Println("Loading playbook:", ag.cfg.Args[0])
 		pf := ansible.PlaybookFile{}
@@ -47,11 +51,37 @@ func (ag *AnsibleGo) Init() error {
 		log.Println("\n" + yaml)
 	}
 
-	embed_bin_data, err := embedbin.GetEmbeddedBinary("darwin", "amd64")
+	// Embed binary test
+	embed_bin_data, err := embedbin.GetEmbeddedBinary("linux", "amd64")
 	if err != nil {
 		log.Println("Unable to find required binary for remote system:", err)
 	}
 	log.Println("Found binary size:", len(embed_bin_data))
+
+	// SSH test
+	ssh_client, err := ssh.New("user", "user", "127.0.0.1", 22)
+	if err != nil {
+		log.Println("Unable to connect to SSH:", err)
+	}
+	if err := ssh_client.Execute("ip a", os.Stdout, os.Stderr); err != nil {
+		log.Println("Failed to execute command over SSH:", err)
+	}
+
+	// WinRM test
+	winrm_client, err := winrm.New("user", "user", "192.168.56.101", 5985)
+	if err != nil {
+		log.Println("Unable to connect to WinRM:", err)
+	}
+
+	if err := winrm_client.Execute("ipconfig /all", os.Stdout, os.Stderr); err != nil {
+		log.Println("Failed to execute command over WinRM:", err)
+	}
+
+	exec_path, _ := os.Executable()
+	fd, _ := os.Open(exec_path)
+	if err := winrm_client.Copy(fd, "C:\\test\\ansiblego.exe", 0750); err != nil {
+		log.Println("Failed to execute command over WinRM:", err)
+	}
 
 	/*task := make(map[string]any)
 	task["name"] = "Execute nothing"
