@@ -12,5 +12,7 @@ import (
 type Transport interface {
 	Execute(cmd string, stdout, stderr io.Writer) (err error)
 
+	Check() (kernel, arch string, err error)
+
 	Copy(content io.Reader, dst string, mode os.FileMode) (err error)
 }

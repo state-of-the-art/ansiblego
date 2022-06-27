@@ -51,18 +51,16 @@ func (ag *AnsibleGo) Init() error {
 		log.Println("\n" + yaml)
 	}
 
-	// Embed binary test
-	embed_bin_data, err := embedbin.GetEmbeddedBinary("linux", "amd64")
-	if err != nil {
-		log.Println("Unable to find required binary for remote system:", err)
-	}
-	log.Println("Found binary size:", len(embed_bin_data))
-
 	// SSH test
 	ssh_client, err := ssh.New("user", "user", "127.0.0.1", 22)
 	if err != nil {
 		log.Println("Unable to connect to SSH:", err)
 	}
+	ssh_kern, ssh_arch, err := ssh_client.Check()
+	if err != nil {
+		log.Println("Failed to execute SSH check:", err)
+	}
+	log.Println("SSH Remote system is:", ssh_kern, ssh_arch)
 	if err := ssh_client.Execute("ip a", os.Stdout, os.Stderr); err != nil {
 		log.Println("Failed to execute command over SSH:", err)
 	}
@@ -72,14 +70,25 @@ func (ag *AnsibleGo) Init() error {
 	if err != nil {
 		log.Println("Unable to connect to WinRM:", err)
 	}
+	winrm_kern, winrm_arch, err := winrm_client.Check()
+	if err != nil {
+		log.Println("Failed to execute WinRM check:", err)
+	}
+	log.Println("WinRM Remote system is:", winrm_kern, winrm_arch)
 
 	if err := winrm_client.Execute("ipconfig /all", os.Stdout, os.Stderr); err != nil {
 		log.Println("Failed to execute command over WinRM:", err)
 	}
 
-	exec_path, _ := os.Executable()
-	fd, _ := os.Open(exec_path)
-	if err := winrm_client.Copy(fd, "C:\\test\\ansiblego.exe", 0750); err != nil {
+	// Embed binary test
+	embed_fd, err := embedbin.GetEmbeddedBinary(winrm_kern, winrm_arch)
+	if err != nil {
+		log.Println("Unable to find required binary for remote system:", err)
+	}
+	defer embed_fd.Close()
+
+	// Copy embed file with WinRM
+	if err := winrm_client.Copy(embed_fd, "C:\\ansiblego.exe", 0750); err != nil {
 		log.Println("Failed to execute command over WinRM:", err)
 	}
 

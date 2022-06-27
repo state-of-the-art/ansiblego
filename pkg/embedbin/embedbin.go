@@ -36,10 +36,13 @@ const (
 	HEADER_MAX_LENGTH = 128 // Maximum length of the header in bytes
 )
 
-// Will return the found embedded binary or empty array
-// TODO: not a great implementation since need to store data
-// in memory, but could be optimized later when will be used
-func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
+type embedbinReadCloser struct {
+	io.Reader
+	io.Closer
+}
+
+// Will return the found embedded binary reader
+func GetEmbeddedBinary(kernel, arch string) (io.ReadCloser, error) {
 	exec_path, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("Unable to locate the executable path: %v", err)
@@ -48,17 +51,17 @@ func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
 	// Open the executable for read
 	exec_file, err := os.Open(exec_path)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to locate the executable path: %v", err)
+		return nil, fmt.Errorf("Unable to open the executable path: %v", err)
 	}
-	defer exec_file.Close()
+	// Note: We don't close the file here and expect user to close it if the func succeeded
+	//defer exec_file.Close()
 
 	buf := make([]byte, 8192)
 	token := []byte(TOKEN_PT1 + TOKEN_PT2)
 
 	// Special case if the needed kernel/arch is the same as runtime
 	if runtime.GOOS == kernel && runtime.GOARCH == arch {
-		// Scanning for token and copying the buffer to output
-		var out []byte
+		var file_pos int64
 		for {
 			length, err := exec_file.Read(buf)
 			if err == io.EOF {
@@ -67,24 +70,33 @@ func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
 			} else if err != nil {
 				return nil, fmt.Errorf("Unable to read bytes: %v", err)
 			}
-			out = append(out, buf[:length]...)
 
-			// Checking the last added data for token keeping in mind a possible overlap
-			sniff_start := len(out) - len(buf) - len(token)
-			if sniff_start < 0 {
-				sniff_start = 0
-			}
-			token_pos := bytes.Index(out[sniff_start:], token)
-			if token_pos < 0 {
-				// No token found so continue
-				continue
+			// Checking the buffer for token
+			token_pos := bytes.Index(buf, token)
+			if token_pos >= 0 {
+				// We found the token so can create the limited reader
+				_, err = exec_file.Seek(0, os.SEEK_SET)
+				if err != nil {
+					return nil, fmt.Errorf("Unable to seek to beginning byte: %v", err)
+				}
+				reader := io.LimitReader(exec_file, file_pos+int64(token_pos))
+				return embedbinReadCloser{reader, exec_file}, nil
 			}
 
-			// We found the token so can cut the out and break the loop
-			out = out[:sniff_start+token_pos]
-			break
+			// Going back in file to count the overlap next time
+			overlap_pos := file_pos + int64(length-len(token))
+			file_pos, err = exec_file.Seek(overlap_pos, os.SEEK_SET)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to seek to byte %d: %v", overlap_pos, err)
+			}
 		}
-		return out, nil
+
+		// No token was found so return the entire file
+		_, err = exec_file.Seek(0, os.SEEK_SET)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to seek to beginning byte: %v", err)
+		}
+		return exec_file, nil
 	}
 
 	// Locating the required section from the bottom of the executable
@@ -157,24 +169,24 @@ func GetEmbeddedBinary(kernel, arch string) ([]byte, error) {
 	// If the binary can be executed directly - just return the data
 	// or if it's packed - need to unpack it
 	if header_fields[1] == "raw" || header_fields[1] == "upx" {
-		return io.ReadAll(reader)
+		return embedbinReadCloser{reader, exec_file}, nil
 	}
 
 	switch header_fields[1] {
 	case "raw", "upx":
-		return io.ReadAll(reader)
+		return embedbinReadCloser{reader, exec_file}, nil
 	case "gz":
 		r, err := gzip.NewReader(reader)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to create Gzip reader: %v", err)
 		}
-		return io.ReadAll(r)
+		return embedbinReadCloser{r, exec_file}, nil
 	case "xz":
 		r, err := xz.NewReader(reader)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to create XZ reader: %v", err)
 		}
-		return io.ReadAll(r)
+		return embedbinReadCloser{r, exec_file}, nil
 	}
 
 	return nil, fmt.Errorf("Unsupported packer for embedded binary: %s", header_fields[1])

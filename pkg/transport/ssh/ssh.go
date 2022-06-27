@@ -1,10 +1,12 @@
 package ssh
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/bramvdbogaerde/go-scp"
 	"golang.org/x/crypto/ssh"
@@ -43,6 +45,10 @@ func (tr *TransportSSH) connect() (*ssh.Client, *ssh.Session, error) {
 		return nil, nil, fmt.Errorf("Failed to create SSH session: %v", err)
 	}
 
+	if _, _, err := tr.Check(); err != nil {
+		return nil, nil, err
+	}
+
 	return client, session, nil
 }
 
@@ -63,6 +69,30 @@ func (tr *TransportSSH) Execute(cmd string, stdout, stderr io.Writer) (err error
 		return fmt.Errorf("Failed to run command: %v", err)
 	}
 	return nil
+}
+
+func (tr *TransportSSH) Check() (kernel, arch string, err error) {
+	stderr_buf := bytes.Buffer{}
+	// Get remote system kernel
+	kern_buf := bytes.Buffer{}
+	if err = tr.Execute("uname -s", &kern_buf, &stderr_buf); err != nil {
+		return kernel, arch, fmt.Errorf("Unable to get the remote system kernel: %v, %v", err, stderr_buf.String())
+	}
+
+	kernel = strings.ToLower(kern_buf.String())
+
+	// Get remote system arch
+	arch_buf := bytes.Buffer{}
+	if err = tr.Execute("uname -m", &arch_buf, &stderr_buf); err != nil {
+		return kernel, arch, fmt.Errorf("Unable to get the remote system arch: %v, %v", err, stderr_buf.String())
+	}
+
+	arch = arch_buf.String()
+	if arch == "x86_64" || arch == "x64" {
+		arch = "amd64"
+	}
+
+	return kernel, arch, nil
 }
 
 func (tr *TransportSSH) Copy(content io.Reader, dst string, mode os.FileMode) (err error) {

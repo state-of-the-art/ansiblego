@@ -58,6 +58,6 @@ for simplicity based on the received experience with implementing the Ansible pl
    * Can run various functions with native interface
    * Performance is good enough
 * Parsing of the simple ansible playbooks/roles with templates
+* SSH/WinRM remote client support
 * TODO: Minimal SSHD transport for the agent mode
-* TODO: SSH/WinRM remote client support
 * TODO: Builtin `SO_DONTROUTE` local proxy

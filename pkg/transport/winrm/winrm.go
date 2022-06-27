@@ -1,9 +1,13 @@
 package winrm
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/masterzen/winrm"
 )
@@ -50,8 +54,116 @@ func (tr *TransportWinRM) Execute(cmd string, stdout, stderr io.Writer) (err err
 	return nil
 }
 
-// A bit adjusted function from https://github.com/jbrekelmans/go-winrm/blob/master/copier.go
+func (tr *TransportWinRM) Check() (kernel, arch string, err error) {
+	// TODO: most of the time it's true, but who knows those
+	// poor things who runs winrm server on linux/mac...
+	kernel = "windows"
+
+	// Get remote system arch
+	arch_buf := bytes.Buffer{}
+	stderr_buf := bytes.Buffer{}
+	if err = tr.Execute("set processor", &arch_buf, &stderr_buf); err != nil {
+		return kernel, arch, fmt.Errorf("Unable to get the remote system arch: %v", err)
+	}
+
+	out_lines := strings.Split(arch_buf.String(), "\n")
+	for _, l := range out_lines {
+		if strings.HasPrefix(strings.TrimSpace(l), "PROCESSOR_ARCHITECTURE=") {
+			arch = strings.ToLower(strings.TrimSpace(strings.Split(l, "=")[1]))
+		}
+	}
+
+	if arch == "" {
+		return kernel, arch, fmt.Errorf("No arch found for remote system: %v, %v", arch_buf.String(), stderr_buf.String())
+	}
+
+	if arch == "x86_64" || arch == "x64" {
+		arch = "amd64"
+	}
+
+	return kernel, arch, nil
+}
+
+// Rewritten for simplicity version of very quick winrm file copy through stdin
+// for io.Reader from: https://github.com/jbrekelmans/go-winrm/blob/master/copier.go
 func (tr *TransportWinRM) Copy(content io.Reader, dst string, mode os.FileMode) error {
-	wcp := NewWinRMCP(tr.client, 1)
-	return wcp.Copy(content, dst)
+	// TODO: mode
+	script := `begin {
+		$path = ` + powerShellQuotedStringLiteral(dst) + `
+		$DebugPreference = "Continue"
+		$ErrorActionPreference = "Stop"
+		Set-StrictMode -Version 2
+		$fd = [System.IO.File]::Create($path)
+		$sha256 = [System.Security.Cryptography.SHA256CryptoServiceProvider]::Create()
+		$bytes = @() #initialize for empty file case
+	}
+	process {
+		$bytes = [System.Convert]::FromBase64String($input)
+		$sha256.TransformBlock($bytes, 0, $bytes.Length, $bytes, 0) | Out-Null
+		$fd.Write($bytes, 0, $bytes.Length)
+	}
+	end {
+		$sha256.TransformFinalBlock($bytes, 0, 0) | Out-Null
+		$hash = [System.BitConverter]::ToString($sha256.Hash).Replace("-", "").ToLowerInvariant()
+		$fd.Close()
+		Write-Output "{""sha256"":""$hash""}"
+	}`
+
+	shell, err := tr.client.CreateShell()
+	if err != nil {
+		return err
+	}
+	defer shell.Close()
+
+	cmd, err := shell.Execute(powerShellScript(script))
+	if err != nil {
+		return err
+	}
+	defer cmd.Close()
+
+	var wg sync.WaitGroup
+	copyFunc := func(w io.Writer, r io.Reader) {
+		defer wg.Done()
+		io.Copy(w, r)
+	}
+
+	wg.Add(2)
+	go copyFunc(os.Stdout, cmd.Stdout)
+	go copyFunc(os.Stderr, cmd.Stderr)
+
+	// Making chunk buffer for base64 encoding (which is 4 bytes for 3 bytes of data)
+	chunk := make([]byte, (tr.client.Parameters.EnvelopeSize-1000)/4*3)
+	b64_chunk := make([]byte, tr.client.Parameters.EnvelopeSize-1000+2)
+	id := 0
+	for {
+		chunk_len, err := content.Read(chunk)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if chunk_len == 0 {
+			cmd.Stdin.Close()
+			break
+		}
+
+		// Using base64 encoding because it's quite hard to transfer binary data through winrm
+		base64.StdEncoding.Encode(b64_chunk, chunk[:chunk_len])
+		// 2 additional bytes for CRLF in the end of b64 encoded buffer
+		b64_len := base64.StdEncoding.EncodedLen(chunk_len) + 2
+		b64_chunk[b64_len-2] = '\r'
+		b64_chunk[b64_len-1] = '\n'
+		if written_len, err := cmd.Stdin.Write(b64_chunk[:b64_len]); b64_len != written_len || err != nil {
+			return fmt.Errorf("Error during copying chunk (bytes: %d, written: %d): %v", b64_len, written_len, err)
+		}
+		id++
+	}
+	// TODO: Verify sha256
+
+	cmd.Wait()
+	wg.Wait()
+
+	if cmd.ExitCode() != 0 {
+		return fmt.Errorf("Copy operation returned code=%d", cmd.ExitCode())
+	}
+
+	return nil
 }
