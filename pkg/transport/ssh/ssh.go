@@ -30,6 +30,10 @@ func New(user, pass, host string, port int) (*TransportSSH, error) {
 		},
 	}
 
+	if _, _, err := tr.Check(); err != nil {
+		return nil, err
+	}
+
 	return tr, nil
 }
 
@@ -43,10 +47,6 @@ func (tr *TransportSSH) connect() (*ssh.Client, *ssh.Session, error) {
 	if err != nil {
 		client.Close()
 		return nil, nil, fmt.Errorf("Failed to create SSH session: %v", err)
-	}
-
-	if _, _, err := tr.Check(); err != nil {
-		return nil, nil, err
 	}
 
 	return client, session, nil
@@ -73,21 +73,19 @@ func (tr *TransportSSH) Execute(cmd string, stdout, stderr io.Writer) (err error
 
 func (tr *TransportSSH) Check() (kernel, arch string, err error) {
 	stderr_buf := bytes.Buffer{}
-	// Get remote system kernel
-	kern_buf := bytes.Buffer{}
-	if err = tr.Execute("uname -s", &kern_buf, &stderr_buf); err != nil {
+	stdout_buf := bytes.Buffer{}
+	if err = tr.Execute("uname -s -m", &stdout_buf, &stderr_buf); err != nil {
 		return kernel, arch, fmt.Errorf("Unable to get the remote system kernel: %v, %v", err, stderr_buf.String())
 	}
 
-	kernel = strings.ToLower(kern_buf.String())
-
-	// Get remote system arch
-	arch_buf := bytes.Buffer{}
-	if err = tr.Execute("uname -m", &arch_buf, &stderr_buf); err != nil {
-		return kernel, arch, fmt.Errorf("Unable to get the remote system arch: %v, %v", err, stderr_buf.String())
+	kernel_arch_list := strings.Split(stdout_buf.String(), " ")
+	if len(kernel_arch_list) != 2 {
+		return kernel, arch, fmt.Errorf("Bad output from uname: %v, %v", stdout_buf.String(), stderr_buf.String())
 	}
 
-	arch = arch_buf.String()
+	kernel = strings.TrimSpace(strings.ToLower(kernel_arch_list[0]))
+	arch = strings.TrimSpace(strings.ToLower(kernel_arch_list[1]))
+
 	if arch == "x86_64" || arch == "x64" {
 		arch = "amd64"
 	}

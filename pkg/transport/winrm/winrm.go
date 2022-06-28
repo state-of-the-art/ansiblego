@@ -2,9 +2,12 @@ package winrm
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -21,6 +24,10 @@ func New(user, pass, host string, port int) (*TransportWinRM, error) {
 
 	if err := tr.connectPassword(user, pass, host, port); err != nil {
 		return nil, fmt.Errorf("Failed to connect with password: %v", err)
+	}
+
+	if _, _, err := tr.Check(); err != nil {
+		return nil, err
 	}
 
 	return tr, nil
@@ -106,7 +113,7 @@ func (tr *TransportWinRM) Copy(content io.Reader, dst string, mode os.FileMode) 
 		$sha256.TransformFinalBlock($bytes, 0, 0) | Out-Null
 		$hash = [System.BitConverter]::ToString($sha256.Hash).Replace("-", "").ToLowerInvariant()
 		$fd.Close()
-		Write-Output "{""sha256"":""$hash""}"
+		Write-Output $hash
 	}`
 
 	shell, err := tr.client.CreateShell()
@@ -127,9 +134,13 @@ func (tr *TransportWinRM) Copy(content io.Reader, dst string, mode os.FileMode) 
 		io.Copy(w, r)
 	}
 
+	stdout_buf := bytes.Buffer{}
 	wg.Add(2)
-	go copyFunc(os.Stdout, cmd.Stdout)
-	go copyFunc(os.Stderr, cmd.Stderr)
+	go copyFunc(&stdout_buf, cmd.Stdout)
+	go copyFunc(ioutil.Discard, cmd.Stderr)
+
+	// Preparing sha256 calculate object
+	sha256_loc_obj := sha256.New()
 
 	// Making chunk buffer for base64 encoding (which is 4 bytes for 3 bytes of data)
 	chunk := make([]byte, (tr.client.Parameters.EnvelopeSize-1000)/4*3)
@@ -145,6 +156,8 @@ func (tr *TransportWinRM) Copy(content io.Reader, dst string, mode os.FileMode) 
 			break
 		}
 
+		sha256_loc_obj.Write(chunk[:chunk_len])
+
 		// Using base64 encoding because it's quite hard to transfer binary data through winrm
 		base64.StdEncoding.Encode(b64_chunk, chunk[:chunk_len])
 		// 2 additional bytes for CRLF in the end of b64 encoded buffer
@@ -156,13 +169,20 @@ func (tr *TransportWinRM) Copy(content io.Reader, dst string, mode os.FileMode) 
 		}
 		id++
 	}
-	// TODO: Verify sha256
+
+	sha256_loc := hex.EncodeToString(sha256_loc_obj.Sum(nil))
 
 	cmd.Wait()
 	wg.Wait()
 
 	if cmd.ExitCode() != 0 {
 		return fmt.Errorf("Copy operation returned code=%d", cmd.ExitCode())
+	}
+
+	// Verify sha256 to validate the data was copied correctly
+	sha256_rem := strings.TrimSpace(stdout_buf.String())
+	if sha256_rem != sha256_loc {
+		return fmt.Errorf("Copy failed due to checksums mismatch: %v != %v", sha256_rem, sha256_loc)
 	}
 
 	return nil
