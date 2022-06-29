@@ -61,3 +61,28 @@ for simplicity based on the received experience with implementing the Ansible pl
 * SSH/WinRM remote client support
 * TODO: Minimal SSHD transport for the agent mode
 * TODO: Builtin `SO_DONTROUTE` local proxy
+
+### WinRM remote setup
+
+It's a good idea to use https connection for winrm, especially if it requires just a couple of
+additional comamnds:
+
+1. Create certificate:
+   ```
+   $cert = New-SelfSignedCertificate -Subject 'CN=winrm-server' -TextExtension '2.5.29.37={text}1.3.6.1.5.5.7.3.1'
+   $tp = $cert.Thumbprint
+   ```
+2. Create winrm listener (use thumbprint from previous command output):
+   ```
+   winrm create winrm/config/Listener?Address=*+Transport=HTTPS '@{Hostname="winrm-server"; CertificateThumbprint="<cert thumbprint here>"}'
+   ```
+3. Run winrm quickconfig with https:
+   ```
+   winrm quickconfig -transport:https
+   winrm set winrm/config/service/Auth '@{Basic="true"}'
+   ```
+4. Allow firewall rule:
+   ```
+   $FirewallParam = @{DisplayName='WinRM (HTTPS-In)' Direction='Inbound' LocalPort=5986 Protocol='TCP' Action='Allow' Program='System'}
+   New-NetFirewallRule @FirewallParam
+   ```

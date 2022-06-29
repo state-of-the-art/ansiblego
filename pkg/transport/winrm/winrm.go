@@ -35,14 +35,14 @@ func New(user, pass, host string, port int) (*TransportWinRM, error) {
 
 func (tr *TransportWinRM) connectPassword(user, pass, host string, port int) (err error) {
 	config := winrm.NewEndpoint(
-		host,  // Host to connect to
-		port,  // WinRM port
-		false, // Use TLS
-		false, // Allow insecure connection
-		nil,   // CA certificate
-		nil,   // Client Certificate
-		nil,   // Client Key
-		0,     // Timeout
+		host, // Host to connect to
+		port, // WinRM port
+		true, // Use TLS
+		true, // Allow insecure connection
+		nil,  // CA certificate
+		nil,  // Client Certificate
+		nil,  // Client Key
+		0,    // Timeout
 	)
 
 	tr.client, err = winrm.NewClient(config, user, pass)
