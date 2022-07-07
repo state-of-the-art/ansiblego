@@ -59,7 +59,10 @@ for simplicity based on the received experience with implementing the Ansible pl
    * Performance is good enough
 * Parsing of the simple ansible playbooks/roles with templates
 * SSH/WinRM remote client support
-* TODO: Minimal SSHD transport for the agent mode
+* Minimal SSHD transport for the agent mode
+   * Exec whithout shell
+   * Pseudo-shell execution (usable for simple debug)
+   * Detach from shell with `--detached` option
 * TODO: Builtin `SO_DONTROUTE` local proxy
 
 ### WinRM remote setup

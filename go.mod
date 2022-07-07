@@ -6,6 +6,7 @@ require (
 	github.com/bramvdbogaerde/go-scp v1.2.0
 	github.com/cosmos72/gomacro v0.0.0-20220617213951-19e4ba4e0ca3
 	github.com/masterzen/winrm v0.0.0-20220513085036-69f69afcd9e9
+	github.com/mattn/go-shellwords v1.0.12
 	github.com/spf13/cobra v1.4.0
 	github.com/ulikunitz/xz v0.5.10
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
@@ -33,5 +34,6 @@ require (
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
 	golang.org/x/tools v0.1.11 // indirect
 )

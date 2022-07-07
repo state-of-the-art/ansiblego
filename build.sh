@@ -16,8 +16,9 @@ suffixes="linux-amd64 linux-arm64 windows-amd64 darwin-amd64 darwin-arm64"
 for suffix in $suffixes; do
     echo "--> Build binary for ${suffix}"
     GOOS="$(echo "${suffix}" | cut -d- -f1)" GOARCH="$(echo "${suffix}" | cut -d- -f2)" \
-        go build -ldflags="-s -w" -a -o "${name}.raw.${suffix}" "./cmd/${name}"
+        go build -ldflags="-s -w" -a -o "${name}.raw.${suffix}" "./cmd/${name}" &
 done
+wait
 
 if [ "x${PKG_SUFFIX}" != 'xraw' ] ; then
     # Pack all the executables with upx
