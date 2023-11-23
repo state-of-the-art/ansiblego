@@ -5,10 +5,8 @@ package file
 import (
 	"fmt"
 	"log"
-	"reflect"
-	"strings"
 
-	"github.com/state-of-the-art/ansiblego/pkg/modules"
+	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 )
 
 type TaskV1 struct {
@@ -58,23 +56,22 @@ type TaskV1 struct {
 	//Seuser  string
 }
 
-func (t *TaskV1) SetData(data modules.OrderedMap) error {
+func (t *TaskV1) SetData(data ansible.OrderedMap) error {
 	file_data, ok := data.Get("file")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'file' map in task data")
 	}
-	fmap, ok := file_data.(modules.OrderedMap)
+	fmap, ok := file_data.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'file' is not the OrderedMap")
 	}
-	return modules.TaskV1SetData(t, fmap)
+	return ansible.TaskV1SetData(t, fmap)
 }
 
-func (t *TaskV1) GetData() (data modules.OrderedMap) {
-	fmap := modules.TaskV1GetData(t)
-	var out modules.OrderedMap
-	out.Set("file", fmap)
-	return out
+func (t *TaskV1) GetData() (data ansible.OrderedMap) {
+	fmap := ansible.TaskV1GetData(t)
+	data.Set("file", fmap)
+	return data
 }
 
 func (t *TaskV1) Run(vars map[string]any) error {

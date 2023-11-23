@@ -7,9 +7,9 @@ import (
 )
 
 type Config struct {
-	Mode      string   `json:"mode"`       // Operation mode - empty is direct, also "playbook" and "agent" available
 	ExtraVars []string `json:"extra_vars"` // Additional variables to use during execution
-	Args      []string `json:"args"`       // Arguments for the specific mode
+	SkipTags  []string `json:"skip_tags"`  // Skips tasks with provided tags
+	Inventory []string `json:"inventory"`  // Inventory file or hosts list
 
 	Verbose int `json:"verbose"` // Level of verbosiness, 0 is normal, >0 more verbose, <0 less
 }

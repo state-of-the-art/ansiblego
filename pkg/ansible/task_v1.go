@@ -1,4 +1,4 @@
-package modules
+package ansible
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ type TaskV1Interface interface {
 	GetData() OrderedMap
 }
 
-// Proxy is needed for interface conversion from script to compiled
+// Proxy is needed for interface conversion from script to be compiled
 // WARNING: the order of func fields in proxy is ABC: https://github.com/cosmos72/gomacro/issues/128
 type P_TaskV1Interface struct {
 	Object   any
@@ -67,12 +67,14 @@ func taskInterp() *fast.Interp {
 	interp.Comp.Globals.Output.Stderr = ioutil.Discard
 
 	// Import the TaskV1 interface
-	imports.Packages["github.com/state-of-the-art/ansiblego/pkg/modules"] = imports.Package{
+	imports.Packages["github.com/state-of-the-art/ansiblego/pkg/ansible"] = imports.Package{
 		Binds: map[string]reflect.Value{
 			"TaskV1SetData": reflect.ValueOf(TaskV1SetData),
 			"TaskV1GetData": reflect.ValueOf(TaskV1GetData),
+			"ToYaml":        reflect.ValueOf(ToYaml),
 		},
 		Types: map[string]reflect.Type{
+			"Task":            reflect.TypeOf((*Task)(nil)).Elem(),
 			"TaskV1Interface": reflect.TypeOf((*TaskV1Interface)(nil)).Elem(),
 			"OrderedMap":      reflect.TypeOf((*OrderedMap)(nil)).Elem(),
 		},
@@ -83,7 +85,7 @@ func taskInterp() *fast.Interp {
 		Wrappers: map[string][]string{},
 	}
 	// The module could not use the import, but we still need it for proper interfacing
-	interp.ImportPackage("sys_modules", "github.com/state-of-the-art/ansiblego/pkg/modules")
+	interp.ImportPackage("sys_modules", "github.com/state-of-the-art/ansiblego/pkg/ansible")
 
 	return interp
 }
@@ -127,7 +129,7 @@ func GetTaskV1(name string) (out TaskV1Interface, err error) {
 		}
 	}()
 
-	if val, ok := GetCache("task", name); ok {
+	if val, ok := ModuleGetCache("task", name); ok {
 		if out, ok = val.(TaskV1Interface); ok {
 			return out, nil
 		} else {
@@ -142,15 +144,15 @@ func GetTaskV1(name string) (out TaskV1Interface, err error) {
 		return nil, err
 	}
 
-	task_structv, _ := interp.Eval1("sys_modules.TaskV1Interface(&TaskV1{})")
+	task_structv, xtype := interp.Eval1("sys_modules.TaskV1Interface(&TaskV1{})")
 	if err != nil { // Could be an error after interp.Eval1 panic
 		return nil, fmt.Errorf("Task '%s' can't convert the struct `TaskV1` to pointer `TaskV1Interface`: %s", name, err)
 	}
 	if task_structv.Kind() != reflect.Interface {
 		return nil, fmt.Errorf("Task '%s' has issues with struct `TaskV1`", name)
 	}
+	ModuleSetCache("task", name, xtype)
 	task_struct := task_structv.Interface().(TaskV1Interface)
-	SetCache("task", name, task_struct)
 
 	return task_struct, nil
 }

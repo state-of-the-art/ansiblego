@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/state-of-the-art/ansiblego/pkg/modules"
+	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 )
 
 type TaskV1 struct {
@@ -15,7 +15,7 @@ type TaskV1 struct {
 	// Influence whether src needs to be transferred or already is present remotely.
 	Remote_src string
 	// Remote absolute path where the file should be copied to.
-	Dest string
+	Dest string `task:",req"`
 
 	// When used instead of src, sets the contents of a file directly to the specified value.
 	Content string
@@ -56,23 +56,22 @@ type TaskV1 struct {
 	//Seuser  string
 }
 
-func (t *TaskV1) SetData(data modules.OrderedMap) error {
+func (t *TaskV1) SetData(data ansible.OrderedMap) error {
 	copy_data, ok := data.Get("copy")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'copy' map in task data")
 	}
-	fmap, ok := copy_data.(modules.OrderedMap)
+	fmap, ok := copy_data.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'copy' is not the OrderedMap")
 	}
-	return modules.TaskV1SetData(t, fmap)
+	return ansible.TaskV1SetData(t, fmap)
 }
 
-func (t *TaskV1) GetData() (data modules.OrderedMap) {
-	fmap := modules.TaskV1GetData(t)
-	var out modules.OrderedMap
-	out.Set("copy", fmap)
-	return out
+func (t *TaskV1) GetData() (data ansible.OrderedMap) {
+	fmap := ansible.TaskV1GetData(t)
+	data.Set("copy", fmap)
+	return data
 }
 
 func (t *TaskV1) Run(vars map[string]any) error {

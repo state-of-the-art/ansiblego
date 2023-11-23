@@ -1,171 +1,18 @@
-package modules
+package ansible
 
 // Useful utils for task modules which is available through binding
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/state-of-the-art/ansiblego/pkg/template"
 )
-
-type OrderedMap struct {
-	data  map[string]any
-	order []string
-}
-
-func (om *OrderedMap) Set(key string, value any) {
-	if om.data == nil {
-		om.data = make(map[string]any)
-	}
-	if _, ok := value.(map[string]any); ok {
-		// We want to store only OrderedMap instead of map in OrderedMap
-		panic("Prohibited to set `map[string]any` as value - use OrderedMap instead")
-	}
-	om.data[key] = value
-	// Check order list and if no key found add it last
-	for _, k := range om.order {
-		if k == key {
-			return
-		}
-	}
-	om.order = append(om.order, key)
-}
-
-func (om *OrderedMap) Get(key string) (any, bool) {
-	v, ok := om.data[key]
-	return v, ok
-}
-
-func (om *OrderedMap) Pop(key string) (v any, ok bool) {
-	if v, ok = om.data[key]; ok {
-		delete(om.data, key)
-		limit := len(om.order)
-		pos := -1
-		for i := 0; i < limit; i++ {
-			if om.order[i] == key {
-				pos = i
-				break
-			}
-		}
-		if pos < 0 {
-			// In case pos was not found - seems the implementation error is here
-			panic(fmt.Sprintf("No key `%s` found in list: %q", key, om.order))
-		}
-		om.order = append(om.order[:pos], om.order[pos+1:]...)
-	}
-	return v, ok
-}
-
-func (om *OrderedMap) Size() int {
-	return len(om.data)
-}
-
-func (om *OrderedMap) UnmarshalYAML(node *yaml.Node) error {
-	switch node.Kind {
-	case yaml.MappingNode:
-		om.data = make(map[string]any, len(node.Content)/2)
-		var key string
-		for i, n := range node.Content {
-			if i%2 == 0 {
-				if err := n.Decode(&key); err != nil {
-					return err
-				}
-				om.order = append(om.order, key)
-			} else {
-				switch n.Kind {
-				case yaml.MappingNode:
-					var val OrderedMap
-					if err := n.Decode(&val); err != nil {
-						return err
-					}
-					om.data[key] = val
-				case yaml.SequenceNode:
-					lst := make([]any, len(n.Content))
-					for j, a := range n.Content {
-						if a.Kind == yaml.MappingNode {
-							var val OrderedMap
-							if err := a.Decode(&val); err != nil {
-								return err
-							}
-							lst[j] = val
-						} else {
-							var val any
-							if err := a.Decode(&val); err != nil {
-								return err
-							}
-							lst[j] = val
-						}
-					}
-					om.data[key] = lst
-				default:
-					var val any
-					if err := n.Decode(&val); err != nil {
-						return err
-					}
-					om.data[key] = val
-				}
-			}
-		}
-	default:
-		return fmt.Errorf("Unsupported OrderedMap type: %v", node.Kind)
-	}
-	return nil
-}
-
-func (om *OrderedMap) MarshalYAML() (interface{}, error) {
-	nodes := make([]*yaml.Node, len(om.order)*2)
-	for i, key := range om.order {
-		keyn := &yaml.Node{}
-		if err := keyn.Encode(key); err != nil {
-			return nil, err
-		}
-		nodes[i*2] = keyn
-
-		valuen := &yaml.Node{}
-		switch val := om.data[key].(type) {
-		case OrderedMap:
-			d, err := val.MarshalYAML()
-			if err != nil {
-				return nil, err
-			}
-			valuen = d.(*yaml.Node)
-		case []any:
-			valuen.Kind = yaml.SequenceNode
-			valuen.Tag = "!!seq"
-			lst := make([]*yaml.Node, len(val))
-			for j, a := range val {
-				switch v := a.(type) {
-				case OrderedMap:
-					d, err := v.MarshalYAML()
-					if err != nil {
-						return nil, err
-					}
-					lst[j] = d.(*yaml.Node)
-				default:
-					d := &yaml.Node{}
-					if err := d.Encode(v); err != nil {
-						return nil, err
-					}
-					lst[j] = d
-				}
-			}
-			valuen.Content = lst
-		default:
-			if err := valuen.Encode(val); err != nil {
-				return nil, err
-			}
-		}
-		nodes[i*2+1] = valuen
-	}
-	return &yaml.Node{
-		Kind:    yaml.MappingNode,
-		Tag:     "!!map",
-		Content: nodes,
-	}, nil
-}
 
 // TaskV1 struct field tags: `task:"[NAME][,OPTS]"`
 //   * NAME - the yaml key of the field, if `-` - will be skipped
@@ -198,11 +45,13 @@ func TaskV1SetData(task_ptr any, fmap OrderedMap) error {
 			continue
 		}
 
-		val, ok := fmap.Get(info.Name)
+		key := info.Name
+		val, ok := fmap.Get(key)
 		if !ok {
 			// If there is no field name in data keys - check aliases
 			for _, alias := range info.Aliases {
 				if val, ok = fmap.Get(alias); ok {
+					key = alias
 					break
 				}
 			}
@@ -217,7 +66,10 @@ func TaskV1SetData(task_ptr any, fmap OrderedMap) error {
 				}
 			}
 		}
-		if len(info.List) > 0 {
+
+		// If it's a list type - make sure the value is available to pick from
+		// TODO: We need to check the value field before run if it's templated
+		if len(info.List) > 0 && !template.IsTemplate(val.(string)) {
 			// Check if the value in the list
 			found := false
 			for _, v := range info.List {
@@ -231,9 +83,53 @@ func TaskV1SetData(task_ptr any, fmap OrderedMap) error {
 			}
 		}
 		if ok {
-			rvalue.Elem().Field(i).Set(reflect.ValueOf(val))
+			// Ansible really like to mix single value with array usages, so
+			// implementing it here to allow user to set one way or another
+			rfield := rvalue.Elem().Field(i)
+			rval := reflect.ValueOf(val)
+			if rfield.Kind() != rval.Kind() {
+				// Those are not the same types which is alarming, so check if field is an Slice
+				if rfield.Kind() == reflect.Slice && rfield.Type().Elem().Kind() == rval.Kind() {
+					// Ok field is just an array, so set it's first index to the provided value
+					newslice := reflect.MakeSlice(rfield.Type(), 1, 1)
+					newslice.Index(0).Set(rval)
+					rfield.Set(newslice)
+				} else {
+					// Unfortunately the types are incompatible, so probably an error in playbook?
+					return fmt.Errorf("Unable to set the field `%s` of type %s to value: %q of type %s", key, rfield.Type(), val, rval.Type())
+				}
+			} else {
+				// They could be two slices, but different types of elements - so checking that
+				if rfield.Kind() == reflect.Slice && rfield.Type().Elem().Kind() != rval.Type().Elem().Kind() {
+					// Aha, they are slices and element types are different, so try to convert
+					if !rval.IsNil() && rval.Len() > 0 { // If it's empty - then nothing to set
+						if rval.Index(0).Kind() == reflect.Interface && rval.Index(0).Elem().Type() == rfield.Type().Elem() {
+							for i := 0; i < rval.Len(); i++ {
+								rfield.Set(reflect.Append(rfield, rval.Index(i).Elem()))
+							}
+						} else {
+							return fmt.Errorf("Unable to set the field `%s` of type %s to value: %q of type %s", key, rfield.Type(), val, rval.Type())
+						}
+					}
+				} else {
+					// The kinds not slices or their elemenet types are the same - so just set field
+					rfield.Set(rval)
+				}
+			}
+			// Remove key from fmap to signal that it's processed
+			fmap.Pop(key)
 		}
 	}
+
+	// Check if fmap still contains not processed keys - it's dangerous to not process them aciddentally
+	if fmap.Size() > 0 {
+		y, err := fmap.Yaml()
+		if err != nil {
+			y = fmt.Sprintf("Error while encoding the OrderedMap to Yaml: %q, %q", err, fmap)
+		}
+		return fmt.Errorf("Found next unknown task fields (%d) - maybe not implemented?: %s", fmap.Size(), y)
+	}
+
 	return nil
 }
 
@@ -348,4 +244,16 @@ func TaskV1FieldInfo(field *reflect.StructField) (info fieldInfo, err error) {
 	}
 
 	return info, err
+}
+
+// Allows to convert any object to good Yaml string
+func ToYaml(obj any) (string, error) {
+	buf := bytes.Buffer{}
+	enc := yaml.NewEncoder(&buf)
+	defer enc.Close()
+	enc.SetIndent(2)
+	if err := enc.Encode(obj); err != nil {
+		return "", fmt.Errorf("YAML encode error: %v", err)
+	}
+	return "---\n" + buf.String(), nil
 }

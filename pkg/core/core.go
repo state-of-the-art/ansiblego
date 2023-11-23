@@ -8,7 +8,6 @@ import (
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 	"github.com/state-of-the-art/ansiblego/pkg/embedbin"
-	"github.com/state-of-the-art/ansiblego/pkg/modules"
 	"github.com/state-of-the-art/ansiblego/pkg/transport/ssh"
 	"github.com/state-of-the-art/ansiblego/pkg/transport/winrm"
 )
@@ -24,32 +23,35 @@ func New(cfg *Config) (*AnsibleGo, error) {
 	rand.Seed(time.Now().UnixNano())
 
 	ag := &AnsibleGo{cfg: cfg}
-	if err := ag.Init(); err != nil {
+	/*if err := ag.Init(); err != nil {
 		return nil, err
-	}
+	}*/
 
 	return ag, nil
 }
 
-func (ag *AnsibleGo) Init() error {
+func (ag *AnsibleGo) Playbook(playbook_path string) error {
 	ag.running = true
 
-	modules.InitEmbedded()
+	ansible.InitEmbeddedModules()
 
-	// Playbook test
-	if ag.cfg.Mode == "playbook" {
-		log.Println("Loading playbook:", ag.cfg.Args[0])
-		pf := ansible.PlaybookFile{}
-		err := pf.Load(ag.cfg.Args[0])
-		if err != nil {
-			return err
-		}
-		yaml, err := pf.Yaml()
-		if err != nil {
-			return err
-		}
-		log.Println("\n" + yaml)
+	log.Println("Loading playbook:", playbook_path)
+	pf := ansible.PlaybookFile{}
+	err := pf.Load(playbook_path)
+	if err != nil {
+		return err
 	}
+	yaml, err := pf.Yaml()
+	if err != nil {
+		return err
+	}
+	log.Println("\n" + yaml)
+
+	return nil
+}
+
+func (ag *AnsibleGo) TestSSH() error {
+	ag.running = true
 
 	// SSH test
 	ssh_client, err := ssh.New("user", "user", "192.168.56.102", 22)
@@ -72,10 +74,16 @@ func (ag *AnsibleGo) Init() error {
 	}
 	defer ssh_embed_fd.Close()
 
-	// Copy embed file with WinRM
+	// Copy embed file with SSH
 	if err := ssh_client.Copy(ssh_embed_fd, "/tmp/ansiblego", 0750); err != nil {
 		log.Println("Failed to copy over SSH:", err)
 	}
+
+	return nil
+}
+
+func (ag *AnsibleGo) TestWinRM() error {
+	ag.running = true
 
 	// WinRM test
 	winrm_client, err := winrm.New("user", "user", "192.168.56.101", 5986)
@@ -103,6 +111,12 @@ func (ag *AnsibleGo) Init() error {
 	if err := winrm_client.Copy(embed_fd, "C:\\ansiblego.exe", 0750); err != nil {
 		log.Println("Failed to execute command over WinRM:", err)
 	}
+
+	return nil
+}
+
+func (ag *AnsibleGo) Agent(task_data string) error {
+	ag.running = true
 
 	/*task := make(map[string]any)
 	task["name"] = "Execute nothing"

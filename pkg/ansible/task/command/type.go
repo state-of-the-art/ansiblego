@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/state-of-the-art/ansiblego/pkg/modules"
+	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 )
 
 type TaskV1 struct {
@@ -25,23 +25,23 @@ type TaskV1 struct {
 	//Removes string
 
 	// If set to true, append a newline to stdin data.
-	Stdin_add_newline bool `,def:true`
+	Stdin_add_newline bool `task:",def:true"`
 	// Strip empty lines from the end of stdout/stderr in result.
-	Strip_empty_ends bool `,def:true`
+	Strip_empty_ends bool `task:",def:true"`
 
 	// Enable or disable task warnings.
-	//Warn bool `,def:true`
+	//Warn bool `task:",def:true"`
 
 	// Internal vars
 	command_is_string bool // In case the command originally is string
 }
 
-func (t *TaskV1) SetData(data modules.OrderedMap) error {
+func (t *TaskV1) SetData(data ansible.OrderedMap) error {
 	command_data, ok := data.Get("command")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'command' string or map in task data")
 	}
-	fmap, ok := command_data.(modules.OrderedMap)
+	fmap, ok := command_data.(ansible.OrderedMap)
 	if !ok {
 		// "command" not a map
 		var cmdline string
@@ -54,32 +54,33 @@ func (t *TaskV1) SetData(data modules.OrderedMap) error {
 			if len(cmdsplit) > 1 {
 				t.Argv = cmdsplit[1:]
 			}
-			if args_data, ok := data.Get("args"); ok {
-				fmap, _ = args_data.(modules.OrderedMap)
-			}
+			// Args are confusing and instead module need to be used, so skip processing
+			/*if args_data, ok := data.Get("args"); ok {
+				fmap, _ = args_data.(ansible.OrderedMap)
+			}*/
 		}
 	}
 	if !ok {
 		return fmt.Errorf("The 'command' is not string or OrderedMap")
 	}
-	return modules.TaskV1SetData(t, fmap)
+	return ansible.TaskV1SetData(t, fmap)
 }
 
-func (t *TaskV1) GetData() (data modules.OrderedMap) {
-	fmap := modules.TaskV1GetData(t)
-	var out modules.OrderedMap
+func (t *TaskV1) GetData() (data ansible.OrderedMap) {
+	fmap := ansible.TaskV1GetData(t)
 	if t.command_is_string {
-		out.Set("command", strings.Join([]string{t.Cmd, strings.Join(t.Argv, " ")}, " "))
-		// Filter out the cmd and vars from the fmap
+		data.Set("command", strings.Join([]string{t.Cmd, strings.Join(t.Argv, " ")}, " "))
+		// Args are confusing and instead module need to be used, so skip processing
+		/*// Filter out the cmd and vars from the fmap
 		fmap.Pop("argv")
 		fmap.Pop("cmd")
 		if fmap.Size() > 0 {
-			out.Set("args", fmap)
-		}
+			data.Set("args", fmap)
+		}*/
 	} else {
-		out.Set("command", fmap)
+		data.Set("command", fmap)
 	}
-	return out
+	return data
 }
 
 func runAndLog(cmd *exec.Cmd) (string, string, error) {

@@ -14,9 +14,13 @@ var (
 	detach   bool
 
 	root_cmd = &cobra.Command{
-		Use:   "ansiblego",
-		Short: "AnsibleGo simple image configurator",
-		Long:  "A simplest replacement for ansible to build your images",
+		Use:     "ansiblego",
+		Version: "0.1",
+		Short:   "AnsibleGo simple image configurator",
+		Long:    "A simplest replacement for ansible to build your images",
+
+		SilenceUsage: true,
+
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log.Println("AnsibleGo running...")
 			return nil
@@ -40,10 +44,24 @@ func main() {
 		}
 	}
 
-	flags := root_cmd.Flags()
+	/*if version {
+		log.Println("ansiblego-playbook 2.9.27")
+		log.Println("  config file = /home/user/Work/adobe/aquarium-bait/ansible.cfg")
+		log.Println("  configured module search path = ['/home/user/.ansible/plugins/modules', '/usr/share/ansible/plugins/modules']")
+		log.Println("  ansible python module location = /home/user/Work/adobe/aquarium-bait/.venv/lib/python3.10/site-packages/ansible")
+		log.Println("  executable location = /home/user/Work/adobe/aquarium-bait/.venv/bin/ansible-playbook")
+		log.Println("  python version = 3.10.12 (main, Jun 11 2023, 05:26:28) [GCC 11.4.0]")
+	}*/
+	root_cmd.SetVersionTemplate(`{{if .HasParent}}{{.Parent.Name}}-{{end}}{{.Name}} {{.Version}}
+	  config file = 
+	  configured module search path = 
+	  executable location = 
+	`)
+
+	flags := root_cmd.PersistentFlags()
 	flags.SortFlags = false
 
-	// Common flags
+	// Global flags
 	flags.StringVarP(&cfg_path, "cfg", "c", "", "yaml configuration file")
 	flags.IntVarP(&verbose, "verbose", "v", -1000, "verbose logging level: >0 more verbose, <0 less")
 	flags.BoolVar(&detach, "detach", false, "detach from shell to background")

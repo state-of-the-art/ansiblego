@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -11,11 +12,17 @@ import (
 )
 
 var extra_vars *[]string
+var skip_tags *[]string
+var inventory *[]string
 
 var playbook_cmd = &cobra.Command{
-	Use:   "playbook",
-	Short: "Runs the playbooks you have",
-	Long:  "Makes it possible to apply the playbook configuration to the required system",
+	Use:     "playbook",
+	Version: "0.1",
+	Short:   "Runs the playbooks you have",
+	Long:    "Makes it possible to apply the playbook configuration to the required system",
+
+	Args: cobra.MinimumNArgs(1),
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Println("AnsibleGo Playbook running...")
 		cfg := &core.Config{}
@@ -26,8 +33,11 @@ var playbook_cmd = &cobra.Command{
 		if len(*extra_vars) > 0 {
 			cfg.ExtraVars = *extra_vars
 		}
-		if len(args) > 0 {
-			cfg.Args = args
+		if len(*skip_tags) > 0 {
+			cfg.SkipTags = *skip_tags
+		}
+		if len(*inventory) > 0 {
+			cfg.Inventory = *inventory
 		}
 		if verbose != -1000 {
 			cfg.Verbose = verbose
@@ -42,6 +52,12 @@ var playbook_cmd = &cobra.Command{
 
 		log.Println("AnsibleGo initialized")
 
+		for _, pb_path := range args {
+			if err := ango.Playbook(pb_path); err != nil {
+				return err
+			}
+		}
+
 		_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -49,12 +65,14 @@ var playbook_cmd = &cobra.Command{
 
 		log.Println("AnsibleGo exiting...")
 
-		return nil
+		return fmt.Errorf("Not yet ready")
 	},
 }
 
 func init() {
 	playbook_cmd.Flags().SortFlags = false
-	extra_vars = playbook_cmd.Flags().StringSliceP("extra-vars", "e", nil, "additional variables")
+	extra_vars = playbook_cmd.Flags().StringArrayP("extra-vars", "e", nil, "set additional variables as key=value or YAML/JSON, if filename prepend with @ (can occur multiple times)")
+	skip_tags = playbook_cmd.Flags().StringSlice("skip-tags", nil, "only run plays and tasks whose tags do not match these values (comma-separated)")
+	inventory = playbook_cmd.Flags().StringSliceP("inventory", "i", nil, "specify inventory host path or comma separated host list.")
 	root_cmd.AddCommand(playbook_cmd)
 }

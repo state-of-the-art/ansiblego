@@ -1,28 +1,36 @@
 package ansible
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"reflect"
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	m "github.com/state-of-the-art/ansiblego/pkg/modules"
 )
 
 type Task struct {
-	Name        string        `yaml:",omitempty"`
-	Environment *m.OrderedMap `yaml:",omitempty"`
+	Name        string      `yaml:",omitempty"`
+	Environment *OrderedMap `yaml:",omitempty"`
 
-	Become     bool          `yaml:",omitempty"`
-	Vars       *m.OrderedMap `yaml:",omitempty"`
-	With_items []string      `yaml:",omitempty"`
-	With_dict  *m.OrderedMap `yaml:",omitempty"`
+	When     string      `yaml:",omitempty"` // Only string right now, array looks confusing
+	Become   bool        `yaml:",omitempty"`
+	Vars     *OrderedMap `yaml:",omitempty"`
+	Register string      `yaml:",omitempty"`
 
-	ModuleName string            `yaml:"-"`
-	ModuleData m.TaskV1Interface `yaml:"-"`
+	With_items []string    `yaml:",omitempty"`
+	With_dict  *OrderedMap `yaml:",omitempty"`
+
+	Failed_when string `yaml:",omitempty"`
+
+	// TODO: Actually block could be potentally a task module, but for now in v1 it's just a
+	// special case of task. Maybe in v2 it will be possible to pass yaml nodes to the tasks to
+	// properly process subtasks of block, who knows...
+	Block []*Task `yaml:",omitempty"` // Special case, contains list of tasks to execute
+
+	ModuleName string          `yaml:"-"`
+	ModuleData TaskV1Interface `yaml:"-"`
 }
 
 type tmpTask Task // Used for quick yml unmarshal
@@ -46,14 +54,7 @@ func (c *Task) Parse(data []byte) error {
 }
 
 func (c *Task) Yaml() (string, error) {
-	buf := bytes.Buffer{}
-	enc := yaml.NewEncoder(&buf)
-	defer enc.Close()
-	enc.SetIndent(2)
-	if err := enc.Encode(c); err != nil {
-		return "", fmt.Errorf("YAML encode error: %v", err)
-	}
-	return "---\n" + buf.String(), nil
+	return ToYaml(c)
 }
 
 // Determine what kind of the additional fields is here
@@ -73,10 +74,14 @@ func (c *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 	}
 	c.Name = tmp_task.Name
 	c.Environment = tmp_task.Environment
+	c.Block = tmp_task.Block
+	c.When = tmp_task.When
 	c.Become = tmp_task.Become
 	c.Vars = tmp_task.Vars
 	c.With_items = tmp_task.With_items
 	c.With_dict = tmp_task.With_dict
+	c.Failed_when = tmp_task.Failed_when
+	c.Register = tmp_task.Register
 
 	// Collecting the structure fields to fill
 	struct_v := reflect.ValueOf(c)
@@ -100,13 +105,18 @@ func (c *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 		return err
 	}
 
-	var task_fields m.OrderedMap
+	var task_fields OrderedMap
 	// Searching the unknown fields in yaml map
 	for k, node := range tmp_fields {
+		// Removing prefix for the `win_` field since we have universal ones
+		if strings.HasPrefix(k, "win_") {
+			log.Printf("WARN: Found win_ prefixed task '%s' - using it without prefix\n", k)
+			k = k[4:]
+		}
 		if _, ok := struct_fields[k]; !ok {
 			switch node.Kind {
 			case yaml.MappingNode:
-				var val m.OrderedMap
+				var val OrderedMap
 				if err := node.Decode(&val); err != nil {
 					return err
 				}
@@ -118,24 +128,44 @@ func (c *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 				}
 				task_fields.Set(k, val)
 			}
-			if m.IsTask(k) && len(c.ModuleName) < 1 {
+			if ModuleIsTask(k) && len(c.ModuleName) < 1 {
 				c.ModuleName = k
 			}
 		}
 	}
-	if len(c.ModuleName) < 1 {
-		y, _ := yaml.Marshal(value)
-		return fmt.Errorf("Task module for task `%s` is not implemented:\n", c.Name, string(y))
+
+	// If task is not a block - then processing as task module
+	if len(c.Block) < 1 {
+		// Processing task module
+		if len(c.ModuleName) < 1 {
+			y, err := ToYaml(value)
+			if err != nil {
+				return fmt.Errorf("Task module for task `%s` is not implemented, but unable to show:\n%v", c.Name, err)
+			}
+			return fmt.Errorf("Task module for task `%s` is not implemented:\n%s", c.Name, y)
+		}
+
+		// Filling the task with data
+		c.ModuleData, err = GetTaskV1(c.ModuleName)
+		if err != nil {
+			return fmt.Errorf("Unable to get definition variable from task module `%s`: %s", c.ModuleName, err)
+		}
+		err = c.ModuleData.SetData(task_fields)
+		if err != nil {
+			return fmt.Errorf("Unable to set data for task module `%s`: %s", c.ModuleName, err)
+		}
+
+		// Remove processed task module, to check later if there is something else left...
+		task_fields.Pop(c.ModuleName)
 	}
 
-	// Filling the task with data
-	c.ModuleData, err = m.GetTaskV1(c.ModuleName)
-	if err != nil {
-		return fmt.Errorf("Unable to get definition variable from task module `%s`: %s", c.ModuleName, err)
-	}
-	err = c.ModuleData.SetData(task_fields)
-	if err != nil {
-		return fmt.Errorf("Unable to set data for task module `%s`: %s", c.ModuleName, err)
+	// In case there are something else - let's tell user about that, because skipping could do more harm
+	if task_fields.Size() > 0 {
+		y, err := task_fields.Yaml()
+		if err != nil {
+			return fmt.Errorf("Task `%s` contains unknown fields, but unable to show:\n%v", c.Name, err)
+		}
+		return fmt.Errorf("Task `%s` contains unknown fields:\n%s", c.Name, y)
 	}
 
 	return nil
@@ -149,12 +179,16 @@ func (c *Task) MarshalYAML() (interface{}, error) {
 	}
 
 	// Adding data from module
-	data := c.ModuleData.GetData()
+	var data OrderedMap
+	if len(c.Block) < 1 {
+		data = c.ModuleData.GetData()
+	}
 	module_node := &yaml.Node{}
 	if err := module_node.Encode(&data); err != nil {
 		return nil, err
 	}
 	node.Content = append(node.Content, module_node.Content...)
+	node.Style = 0 // Preventing encoder from switching to FlowStyle which mess the yaml style
 
 	return node, nil
 }
