@@ -4,9 +4,9 @@ package apt
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 type TaskV1 struct {
@@ -70,7 +70,7 @@ func (t *TaskV1) GetData() (data ansible.OrderedMap) {
 }
 
 func (t *TaskV1) Run(vars map[string]any) error {
-	log.Println("TODO: Implement apt.Run")
+	log.Error("TODO: Implement apt.Run")
 
 	return nil
 }

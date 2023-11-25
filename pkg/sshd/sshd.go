@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -15,6 +14,8 @@ import (
 	"github.com/mattn/go-shellwords"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 // Needs just user, password and addr like "0.0.0.0:2222"
@@ -30,33 +31,33 @@ func Run(user, password, addr string) error {
 
 	private_key, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		log.Fatal("Failed to generate new private key: ", err)
+		return log.Error("Failed to generate new private key: ", err)
 	}
 
 	private, err := ssh.NewSignerFromKey(private_key)
 	if err != nil {
-		log.Fatal("Failed to create signer for private key: ", err)
+		return log.Error("Failed to create signer for private key: ", err)
 	}
 
 	config.AddHostKey(private)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal("Failed to listen for connection: ", err)
+		return log.Error("Failed to listen for connection: ", err)
 	}
 	for {
 		nconn, err := listener.Accept()
 		if err != nil {
-			log.Println("Failed to accept incoming connection: ", err)
+			log.Error("Failed to accept incoming connection: ", err)
 		}
 
 		conn, chans, reqs, err := ssh.NewServerConn(nconn, config)
 		if err != nil {
-			log.Println("Failed to handshake: ", err)
+			log.Error("Failed to handshake: ", err)
 			nconn.Close()
 			continue
 		}
-		log.Printf("User '%s' just logged in\n", conn.User())
+		log.Infof("User '%s' just logged in\n", conn.User())
 
 		go ssh.DiscardRequests(reqs)
 		go handleChannels(chans)
@@ -80,7 +81,7 @@ func handleChannel(new_channel ssh.NewChannel) {
 	}
 	channel, requests, err := new_channel.Accept()
 	if err != nil {
-		log.Fatalf("Could not accept channel: %v", err)
+		log.Errorf("Could not accept channel: %v", err)
 	}
 
 	env := os.Environ()
@@ -90,7 +91,7 @@ func handleChannel(new_channel ssh.NewChannel) {
 			switch req.Type {
 			case "pty-req":
 				req.Reply(true, nil)
-				log.Println("Pty request")
+				log.Debug("Pty request")
 			case "env":
 				e := struct{ Name, Value string }{}
 				ssh.Unmarshal(req.Payload, &e)
@@ -105,10 +106,10 @@ func handleChannel(new_channel ssh.NewChannel) {
 				}
 				if err != nil {
 					ex.Status = 1
-					log.Println("Executing error:", err)
+					log.Error("Executing error:", err)
 				}
 				if _, err := channel.SendRequest("exit-status", false, ssh.Marshal(&ex)); err != nil {
-					log.Printf("Unable to send status: %v", err)
+					log.Errorf("Unable to send status: %v", err)
 				}
 				channel.Close()
 			case "shell":
@@ -124,12 +125,12 @@ func handleChannel(new_channel ssh.NewChannel) {
 						}
 						err = processCmd(term, line, env)
 						if err != nil {
-							log.Println("Executing error:", err)
+							log.Error("Executing error:", err)
 						}
 					}
 				}()
 			default:
-				log.Println("Unknown type:", req.Type)
+				log.Error("Unknown type:", req.Type)
 				req.Reply(true, nil)
 			}
 		}
@@ -154,7 +155,7 @@ func processCmd(connection io.Writer, command string, envs []string) error {
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Env = envs
 
-	log.Printf("Executing: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
+	log.Infof("Executing: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
 	cmd.Stdout = connection
 	cmd.Stderr = connection
 	err = cmd.Run()

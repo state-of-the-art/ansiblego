@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/state-of-the-art/ansiblego/pkg/core"
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 var agent_cmd = &cobra.Command{
@@ -15,25 +15,22 @@ var agent_cmd = &cobra.Command{
 	Short: "Executes the provided task/s",
 	Long:  "It runs remotely to execute the requests and is usable to test commands",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Println("AnsibleGo Agent running...")
+		log.Info("AnsibleGo Agent running...")
 
-		cfg := &core.Config{}
-		if err := cfg.ReadConfigFile(cfg_path); err != nil {
-			log.Println("Unable to apply config file:", cfg_path, err)
-			return err
+		cfg := &core.AgentConfig{}
+		if err := core.ReadConfigFile(cfg, cfg_path); err != nil {
+			return log.Error("Unable to apply config file:", cfg_path, err)
 		}
-		if verbose != -1000 {
-			cfg.Verbose = verbose
-		}
+		cfg.Verbosity = log.Verbosity
 
-		ango, err := core.New(cfg)
+		ango, err := core.New(&cfg.CommonConfig)
 		if err != nil {
 			return err
 		}
 
-		log.Println("DEBUG:", cfg)
+		log.Debug("AgentConfig:", cfg)
 
-		log.Println("AnsibleGo initialized")
+		log.Debug("AnsibleGo initialized")
 
 		// For now use it as test runner
 		/*for _, task_data := range args {
@@ -45,7 +42,7 @@ var agent_cmd = &cobra.Command{
 
 		ango.Close()
 
-		log.Println("AnsibleGo exiting...")
+		log.Info("AnsibleGo exiting...")
 
 		return nil
 	},

@@ -1,10 +1,9 @@
 package main
 
 import (
-	"log"
-
 	"github.com/spf13/cobra"
 
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 	"github.com/state-of-the-art/ansiblego/pkg/sshd"
 )
 
@@ -17,7 +16,7 @@ var sshd_cmd = &cobra.Command{
 	Short: "Provides you a transport to the remote system",
 	Long:  "An embedded cross-platform ssh server to simplify setup of the minimal environments",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Printf("AnsibleGo SSHD running on %s...\n", sshd_address)
+		log.Infof("AnsibleGo SSHD running on %s...\n", sshd_address)
 		sshd.Run(sshd_user, sshd_password, sshd_address)
 		return nil
 	},

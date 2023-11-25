@@ -3,11 +3,12 @@ package ansible
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"reflect"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 type Task struct {
@@ -110,7 +111,7 @@ func (c *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 	for k, node := range tmp_fields {
 		// Removing prefix for the `win_` field since we have universal ones
 		if strings.HasPrefix(k, "win_") {
-			log.Printf("WARN: Found win_ prefixed task '%s' - using it without prefix\n", k)
+			log.Warnf("Found win_ prefixed task '%s' - using it without prefix\n", k)
 			k = k[4:]
 		}
 		if _, ok := struct_fields[k]; !ok {

@@ -3,12 +3,13 @@ package ansible
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"reflect"
 	"runtime/debug"
 
 	"github.com/cosmos72/gomacro/fast"
 	"github.com/cosmos72/gomacro/imports"
+
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 type TaskV1Interface interface {
@@ -62,9 +63,31 @@ func taskInterp() *fast.Interp {
 	// somewhere in modules, but let's leave it for the later optimization.
 	interp := fast.New()
 
-	// Discard warnings
-	// TODO: Enable if AnsibleGo running debug mode
-	interp.Comp.Globals.Output.Stderr = ioutil.Discard
+	// Discard interp warnings
+	if log.Verbosity < log.DEBUG {
+		interp.Comp.Globals.Output.Stderr = ioutil.Discard
+	}
+
+	// Import logging
+	imports.Packages["github.com/state-of-the-art/ansiblego/pkg/log"] = imports.Package{
+		Binds: map[string]reflect.Value{
+			"Trace":  reflect.ValueOf(log.Trace),
+			"Tracef": reflect.ValueOf(log.Tracef),
+			"Debug":  reflect.ValueOf(log.Debug),
+			"Debugf": reflect.ValueOf(log.Debugf),
+			"Info":   reflect.ValueOf(log.Info),
+			"Infof":  reflect.ValueOf(log.Infof),
+			"Warn":   reflect.ValueOf(log.Warn),
+			"Warnf":  reflect.ValueOf(log.Warnf),
+			"Error":  reflect.ValueOf(log.Error),
+			"Errorf": reflect.ValueOf(log.Errorf),
+		},
+		Types:    map[string]reflect.Type{},
+		Proxies:  map[string]reflect.Type{},
+		Untypeds: map[string]string{},
+		Wrappers: map[string][]string{},
+	}
+	interp.ImportPackage("sys_modules", "github.com/state-of-the-art/ansiblego/pkg/log")
 
 	// Import the TaskV1 interface
 	imports.Packages["github.com/state-of-the-art/ansiblego/pkg/ansible"] = imports.Package{
@@ -106,8 +129,7 @@ func evalTask(interp *fast.Interp, name string) error {
 		}
 
 		interp.Comp.Globals.Filepath = mod_path
-		// TODO: Print if AnsibleGo running debug mode
-		//log.Println("Loading module src:", mod_path)
+		log.Debug("Loading module src:", mod_path)
 		_, err = interp.EvalReader(f)
 		interp.Comp.Globals.Filepath = "interpreter"
 		if err != nil {
@@ -133,7 +155,7 @@ func GetTaskV1(name string) (out TaskV1Interface, err error) {
 		if out, ok = val.(TaskV1Interface); ok {
 			return out, nil
 		} else {
-			log.Println("WARN: Incorrect task type in cache:", reflect.TypeOf(val))
+			log.Warn("Incorrect task type in cache:", reflect.TypeOf(val))
 		}
 	}
 

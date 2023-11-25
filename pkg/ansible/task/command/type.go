@@ -5,11 +5,11 @@ package command
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 type TaskV1 struct {
@@ -86,7 +86,7 @@ func (t *TaskV1) GetData() (data ansible.OrderedMap) {
 func runAndLog(cmd *exec.Cmd) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 
-	log.Printf("Executing: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
+	log.Debugf("Executing: %s %s", cmd.Path, strings.Join(cmd.Args[1:], " "))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
@@ -104,10 +104,10 @@ func runAndLog(cmd *exec.Cmd) (string, string, error) {
 	}
 
 	if len(stdout_string) > 0 {
-		log.Printf("Stdout: %s", stdout_string)
+		log.Debugf("Stdout: %s", stdout_string)
 	}
 	if len(stderr_string) > 0 {
-		log.Printf("Stderr: %s", stderr_string)
+		log.Debugf("Stderr: %s", stderr_string)
 	}
 
 	// Replace these for Windows, we only want to deal with Unix style line endings.

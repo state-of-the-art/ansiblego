@@ -2,10 +2,11 @@ package ansible
 
 import (
 	"embed"
-	"log"
 	"path"
 
 	"github.com/cosmos72/gomacro/xreflect"
+
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 //go:embed task
@@ -27,10 +28,11 @@ func InitEmbeddedModules() {
 			modules_cache[path.Join(mtype.Name(), name)] = nil
 		}
 	}
-	// TODO: Enable in debug mode
-	log.Println("Embedded modules:", len(modules_cache))
-	for k, _ := range modules_cache {
-		log.Println(" ", k)
+	if log.Verbosity == log.DEBUG {
+		log.Debug("Embedded modules:", len(modules_cache))
+		for k, _ := range modules_cache {
+			log.Debug(" ", k)
+		}
 	}
 }
 

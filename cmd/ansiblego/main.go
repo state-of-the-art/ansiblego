@@ -1,17 +1,19 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/exec"
 
 	"github.com/spf13/cobra"
+
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 var (
-	cfg_path string
-	verbose  int
-	detach   bool
+	cfg_path      string
+	log_verbosity string
+	log_timestamp bool
+	detach        bool
 
 	root_cmd = &cobra.Command{
 		Use:     "ansiblego",
@@ -21,8 +23,19 @@ var (
 
 		SilenceUsage: true,
 
+		// Init the global variables
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			log.UseTimestamp = log_timestamp
+			err := log.SetVerbosity(log_verbosity)
+			if err != nil {
+				return err
+			}
+
+			return log.InitLoggers()
+		},
+
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log.Println("AnsibleGo running...")
+			log.Info("AnsibleGo running...")
 			return nil
 		},
 	}
@@ -63,7 +76,8 @@ func main() {
 
 	// Global flags
 	flags.StringVarP(&cfg_path, "cfg", "c", "", "yaml configuration file")
-	flags.IntVarP(&verbose, "verbose", "v", -1000, "verbose logging level: >0 more verbose, <0 less")
+	flags.StringVarP(&log_verbosity, "verbosity", "v", "info", "log level (error,warn,info,debug,trace)")
+	flags.BoolVar(&log_timestamp, "timestamp", true, "prepend timestamps for each log line")
 	flags.BoolVar(&detach, "detach", false, "detach from shell to background")
 
 	if err := root_cmd.Execute(); err != nil {
