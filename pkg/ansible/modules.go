@@ -1,18 +1,22 @@
 package ansible
 
+// This logic allows to cache gomacro interps to not process them twice
+// In theory it gives ~30x boost over the regular creating the new interp
+
 import (
 	"embed"
 	"path"
 
-	"github.com/cosmos72/gomacro/xreflect"
+	"github.com/cosmos72/gomacro/fast"
 
 	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 //go:embed task
+//go:embed fact
 var modules embed.FS
 
-var modules_cache = map[string]*xreflect.Type{}
+var modules_cache = map[string]*fast.Interp{}
 
 func InitEmbeddedModules() {
 	mtypes, _ := modules.ReadDir(".")
@@ -43,18 +47,18 @@ func ModuleIsTask(name string) bool {
 	return ok
 }
 
-func ModuleSetCache(typ, name string, xtype xreflect.Type) {
-	p := path.Join(typ, name)
-	if modules_cache[p] == nil {
-		modules_cache[p] = &xtype
-	}
+func ModuleIsFact(name string) bool {
+	_, ok := modules_cache["fact/"+name]
+
+	return ok
 }
 
-func ModuleGetCache(typ, name string) (any, bool) {
+func ModuleSetCache(typ, name string, interp *fast.Interp) {
 	p := path.Join(typ, name)
-	if modules_cache[p] != nil {
-		val := xreflect.New(*modules_cache[p])
-		return val.Interface(), true
-	}
-	return nil, false
+	modules_cache[p] = interp
+}
+
+func ModuleGetCache(typ, name string) *fast.Interp {
+	p := path.Join(typ, name)
+	return modules_cache[p]
 }

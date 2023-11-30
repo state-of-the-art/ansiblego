@@ -8,6 +8,7 @@ require (
 	github.com/cosmos72/gomacro v0.0.0-20231110175219-232ceb1c4098
 	github.com/masterzen/winrm v0.0.0-20220513085036-69f69afcd9e9
 	github.com/mattn/go-shellwords v1.0.12
+	github.com/relex/aini v1.6.0
 	github.com/spf13/cobra v1.4.0
 	github.com/ulikunitz/xz v0.5.10
 	golang.org/x/crypto v0.14.0
@@ -19,6 +20,7 @@ require (
 	github.com/Azure/go-ntlmssp v0.0.0-20211209120228-48547f28849e // indirect
 	github.com/ChrisTrenkamp/goxpath v0.0.0-20210404020558-97928f7e12b6 // indirect
 	github.com/gofrs/uuid v4.2.0+incompatible // indirect
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
@@ -36,6 +38,7 @@ require (
 	github.com/peterh/liner v1.2.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/samber/lo v1.38.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect

@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	cfg_path      string
-	log_verbosity string
-	log_timestamp bool
-	detach        bool
+	p_cfg_path      string
+	p_log_verbosity string
+	p_log_timestamp bool
+	p_detach        bool
 
 	root_cmd = &cobra.Command{
 		Use:     "ansiblego",
@@ -25,8 +25,8 @@ var (
 
 		// Init the global variables
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			log.UseTimestamp = log_timestamp
-			err := log.SetVerbosity(log_verbosity)
+			log.UseTimestamp = p_log_timestamp
+			err := log.SetVerbosity(p_log_verbosity)
 			if err != nil {
 				return err
 			}
@@ -75,10 +75,10 @@ func main() {
 	flags.SortFlags = false
 
 	// Global flags
-	flags.StringVarP(&cfg_path, "cfg", "c", "", "yaml configuration file")
-	flags.StringVarP(&log_verbosity, "verbosity", "v", "info", "log level (error,warn,info,debug,trace)")
-	flags.BoolVar(&log_timestamp, "timestamp", true, "prepend timestamps for each log line")
-	flags.BoolVar(&detach, "detach", false, "detach from shell to background")
+	flags.StringVarP(&p_cfg_path, "cfg", "c", "", "yaml configuration file")
+	flags.StringVarP(&p_log_verbosity, "verbosity", "v", "info", "log level (error,warn,info,debug,trace)")
+	flags.BoolVar(&p_log_timestamp, "timestamp", true, "prepend timestamps for each log line")
+	flags.BoolVar(&p_detach, "detach", false, "detach from shell to background")
 
 	if err := root_cmd.Execute(); err != nil {
 		os.Exit(1)

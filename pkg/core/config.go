@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/state-of-the-art/ansiblego/pkg/ansible/inventory"
 )
 
 // Common configuration for the framework
@@ -17,7 +19,8 @@ type PlaybookConfig struct {
 
 	ExtraVars []string `json:"extra_vars"` // Additional variables to use during execution
 	SkipTags  []string `json:"skip_tags"`  // Skips tasks with provided tags
-	Inventory []string `json:"inventory"`  // Inventory file or hosts list
+
+	Inventory *inventory.Inventory `json:"inventory"` // Parsed inventory data
 }
 
 // Agent execution config

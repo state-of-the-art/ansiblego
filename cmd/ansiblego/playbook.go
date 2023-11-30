@@ -8,13 +8,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
+	"github.com/state-of-the-art/ansiblego/pkg/ansible/inventory"
 	"github.com/state-of-the-art/ansiblego/pkg/core"
 	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
-var extra_vars *[]string
-var skip_tags *[]string
-var inventory *[]string
+var p_extra_vars *[]string
+var p_skip_tags *[]string
+var p_inventory *[]string
 
 var playbook_cmd = &cobra.Command{
 	Use:     "playbook",
@@ -27,18 +28,21 @@ var playbook_cmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Info("AnsibleGo Playbook running...")
 		cfg := &core.PlaybookConfig{}
-		if err := core.ReadConfigFile(cfg, cfg_path); err != nil {
-			return log.Error("Unable to apply config file:", cfg_path, err)
+		err := core.ReadConfigFile(cfg, p_cfg_path)
+		if err != nil {
+			return log.Error("Unable to apply config file:", p_cfg_path, err)
 		}
 		cfg.Verbosity = log.Verbosity
-		if len(*extra_vars) > 0 {
-			cfg.ExtraVars = *extra_vars
+		if len(*p_extra_vars) > 0 {
+			cfg.ExtraVars = *p_extra_vars
 		}
-		if len(*skip_tags) > 0 {
-			cfg.SkipTags = *skip_tags
+		if len(*p_skip_tags) > 0 {
+			cfg.SkipTags = *p_skip_tags
 		}
-		if len(*inventory) > 0 {
-			cfg.Inventory = *inventory
+		if len(*p_inventory) > 0 {
+			if cfg.Inventory, err = inventory.New(*p_inventory); err != nil {
+				return log.Errorf("Unable to process provided inventory: %v", err)
+			}
 		}
 
 		ango, err := core.New(&cfg.CommonConfig)
@@ -80,6 +84,19 @@ var playbook_cmd = &cobra.Command{
 		//
 		// Start execute stage
 		//
+		if cfg.Inventory == nil || len(cfg.Inventory.Hosts) < 1 {
+			log.Info("Inventory hosts are not specified, skipping playbooks execution")
+			log.Debugf("Inv: %q", cfg.Inventory)
+			return nil
+		}
+
+		for _, host := range cfg.Inventory.Hosts {
+			for _, pb := range playbooks_to_apply {
+				if err := pb.Run(host); err != nil {
+					return fmt.Errorf("Playbook execution error: %v", err)
+				}
+			}
+		}
 
 		_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -94,8 +111,8 @@ var playbook_cmd = &cobra.Command{
 
 func init() {
 	playbook_cmd.Flags().SortFlags = false
-	extra_vars = playbook_cmd.Flags().StringArrayP("extra-vars", "e", nil, "set additional variables as key=value or YAML/JSON, if filename prepend with @ (can occur multiple times)")
-	skip_tags = playbook_cmd.Flags().StringSlice("skip-tags", nil, "only run plays and tasks whose tags do not match these values (comma-separated)")
-	inventory = playbook_cmd.Flags().StringSliceP("inventory", "i", nil, "specify inventory host path or comma separated host list.")
+	p_extra_vars = playbook_cmd.Flags().StringArrayP("extra-vars", "e", nil, "set additional variables as key=value or YAML/JSON, if filename prepend with @ (can occur multiple times)")
+	p_skip_tags = playbook_cmd.Flags().StringSlice("skip-tags", nil, "only run plays and tasks whose tags do not match these values (comma-separated)")
+	p_inventory = playbook_cmd.Flags().StringSliceP("inventory", "i", nil, "specify inventory host path or comma separated host list.")
 	root_cmd.AddCommand(playbook_cmd)
 }

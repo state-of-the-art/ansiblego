@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 	"github.com/state-of-the-art/ansiblego/pkg/core"
 	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
@@ -18,29 +19,31 @@ var agent_cmd = &cobra.Command{
 		log.Info("AnsibleGo Agent running...")
 
 		cfg := &core.AgentConfig{}
-		if err := core.ReadConfigFile(cfg, cfg_path); err != nil {
-			return log.Error("Unable to apply config file:", cfg_path, err)
+		if err := core.ReadConfigFile(cfg, p_cfg_path); err != nil {
+			return log.Error("Unable to apply config file:", p_cfg_path, err)
 		}
 		cfg.Verbosity = log.Verbosity
-
-		ango, err := core.New(&cfg.CommonConfig)
-		if err != nil {
-			return err
-		}
 
 		log.Debug("AgentConfig:", cfg)
 
 		log.Debug("AnsibleGo initialized")
 
-		// For now use it as test runner
-		/*for _, task_data := range args {
-			ango.Agent(task_data)
-		}*/
+		// TODO: Run the facts collector for now
+		for _, mod := range []string{"apparmor", "caps"} {
+			if collected_facts, err := ansible.CollectV1(mod); err == nil {
+				y, err := ansible.ToYaml(collected_facts)
+				if err == nil {
+					log.Infof("Facts from '%s': %s", mod, y)
+				} else {
+					log.Infof("Facts from '%s': %v", mod, err)
+				}
+			} else {
+				log.Infof("Error while collecting facts from '%s': %s", mod, err)
+			}
+		}
 
 		_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-
-		ango.Close()
 
 		log.Info("AnsibleGo exiting...")
 

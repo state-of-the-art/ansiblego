@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
 
 type Role struct {
@@ -12,24 +14,29 @@ type Role struct {
 	Vars        *OrderedMap `yaml:",omitempty"`
 }
 
-func (c *Role) Load(yml_path string) error {
+func (r *Role) Load(yml_path string) error {
 	// Open and parse
 	data, err := ioutil.ReadFile(yml_path)
 	if err != nil {
 		return err
 	}
 
-	return c.Parse(data)
+	return r.Parse(data)
 }
 
-func (c *Role) Parse(data []byte) error {
-	if err := yaml.Unmarshal(data, c); err != nil {
+func (r *Role) Parse(data []byte) error {
+	if err := yaml.Unmarshal(data, r); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Role) Yaml() (string, error) {
-	return ToYaml(c)
+func (r *Role) Yaml() (string, error) {
+	return ToYaml(r)
+}
+
+func (r *Role) Run(vars map[string]any) error {
+	log.Infof("Executing role '%s'", r.Name)
+	return nil
 }
