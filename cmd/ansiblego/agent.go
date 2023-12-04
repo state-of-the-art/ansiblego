@@ -29,7 +29,7 @@ var agent_cmd = &cobra.Command{
 		log.Debug("AnsibleGo initialized")
 
 		// TODO: Run the facts collector for now
-		for _, mod := range []string{"apparmor", "caps"} {
+		for _, mod := range ansible.ModulesList("fact") {
 			if collected_facts, err := ansible.CollectV1(mod); err == nil {
 				y, err := ansible.ToYaml(collected_facts)
 				if err == nil {

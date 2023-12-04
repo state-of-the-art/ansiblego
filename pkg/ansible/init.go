@@ -48,6 +48,7 @@ func init() {
 		Binds: map[string]reflect.Value{
 			"TaskV1SetData": reflect.ValueOf(TaskV1SetData),
 			"TaskV1GetData": reflect.ValueOf(TaskV1GetData),
+			"ModulesList":   reflect.ValueOf(ModulesList),
 			"ToYaml":        reflect.ValueOf(ToYaml),
 		},
 		Types: map[string]reflect.Type{

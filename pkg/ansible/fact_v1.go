@@ -71,7 +71,7 @@ func factInterp(name string) (*fast.Interp, error) {
 func CollectV1(name string) (out *OrderedMap, err error) {
 	defer func() {
 		if pan := recover(); pan != nil {
-			err = fmt.Errorf("Error during executing the task module '%s': %s", name, pan)
+			err = fmt.Errorf("Error during executing the fact module '%s': %s", name, pan)
 		}
 	}()
 

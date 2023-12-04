@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 	"github.com/state-of-the-art/ansiblego/pkg/ansible/inventory"
@@ -33,13 +36,42 @@ var playbook_cmd = &cobra.Command{
 			return log.Error("Unable to apply config file:", p_cfg_path, err)
 		}
 		cfg.Verbosity = log.Verbosity
-		if len(*p_extra_vars) > 0 {
-			cfg.ExtraVars = *p_extra_vars
+		if p_extra_vars != nil {
+			// Parsing extra variables and store to cfg
+			cfg.ExtraVars = make(map[string]any)
+			for _, keyval := range *p_extra_vars {
+				if strings.HasPrefix(keyval, "@") {
+					log.Debugf("Loading extra var yaml file: %q", keyval[1:])
+
+					data, err := ioutil.ReadFile(keyval[1:])
+					if err != nil {
+						return log.Errorf("Unable to read file %q: %v", keyval[1:], err)
+					}
+
+					var extra_vars_data map[string]any
+					if err := yaml.Unmarshal(data, &extra_vars_data); err != nil {
+						return log.Errorf("Unable to parse yaml file %q: %v", keyval[1:], err)
+					}
+
+					for key, val := range extra_vars_data {
+						cfg.ExtraVars[key] = val
+						log.Debugf("Provided extra var from file: %q: %q", key, val)
+					}
+					continue
+				}
+				kv := strings.SplitN(keyval, "=", 2)
+				if len(kv) > 1 {
+					cfg.ExtraVars[kv[0]] = kv[1]
+					log.Debugf("Provided extra var: %q: %q", kv[0], kv[1])
+				} else {
+					return log.Errorf("No value provided for extra var: %v", kv[0])
+				}
+			}
 		}
-		if len(*p_skip_tags) > 0 {
+		if p_skip_tags != nil {
 			cfg.SkipTags = *p_skip_tags
 		}
-		if len(*p_inventory) > 0 {
+		if p_inventory != nil {
 			if cfg.Inventory, err = inventory.New(*p_inventory); err != nil {
 				return log.Errorf("Unable to process provided inventory: %v", err)
 			}
@@ -92,7 +124,7 @@ var playbook_cmd = &cobra.Command{
 
 		for _, host := range cfg.Inventory.Hosts {
 			for _, pb := range playbooks_to_apply {
-				if err := pb.Run(host); err != nil {
+				if err := pb.Run(cfg, host); err != nil {
 					return fmt.Errorf("Playbook execution error: %v", err)
 				}
 			}

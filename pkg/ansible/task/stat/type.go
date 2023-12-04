@@ -44,8 +44,8 @@ func (t *TaskV1) GetData() (data ansible.OrderedMap) {
 	return data
 }
 
-func (t *TaskV1) Run(vars map[string]any) error {
+func (t *TaskV1) Run(vars map[string]any) (out ansible.OrderedMap, err error) {
 	log.Error("TODO: Implement stat.Run")
 
-	return nil
+	return
 }

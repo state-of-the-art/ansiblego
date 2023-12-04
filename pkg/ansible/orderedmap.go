@@ -11,6 +11,14 @@ type OrderedMap struct {
 	order []string
 }
 
+func (om *OrderedMap) Keys() (keys []string) {
+	keys = make([]string, len(om.order))
+	for i, key := range om.order {
+		keys[i] = key
+	}
+	return
+}
+
 func (om *OrderedMap) Set(key string, value any) {
 	if om.data == nil {
 		om.data = make(map[string]any)

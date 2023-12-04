@@ -36,7 +36,7 @@ func (r *Role) Yaml() (string, error) {
 	return ToYaml(r)
 }
 
-func (r *Role) Run(vars map[string]any) error {
-	log.Infof("Executing role '%s'", r.Name)
-	return nil
+func (r *Role) Run(vars map[string]any) (OrderedMap, error) {
+	log.Warnf("TODO: Executing role %q", r.Name)
+	return OrderedMap{}, nil
 }

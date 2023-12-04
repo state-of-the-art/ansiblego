@@ -117,7 +117,7 @@ func runAndLog(cmd *exec.Cmd) (string, string, error) {
 	return return_stdout, return_stderr, err
 }
 
-func (t *TaskV1) Run(vars map[string]any) error {
+func (t *TaskV1) Run(vars map[string]any) (out ansible.OrderedMap, err error) {
 	var cmd *exec.Cmd
 	if t.Cmd != "" {
 		cmd = exec.Command(t.Cmd, t.Argv...)
@@ -126,6 +126,7 @@ func (t *TaskV1) Run(vars map[string]any) error {
 		cmd = exec.Command(t.Argv[0], t.Argv[1:]...)
 	}
 	runAndLog(cmd)
+	log.Error("TODO: Implement command.Run output")
 
-	return nil
+	return
 }

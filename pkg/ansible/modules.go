@@ -6,6 +6,7 @@ package ansible
 import (
 	"embed"
 	"path"
+	"strings"
 
 	"github.com/cosmos72/gomacro/fast"
 
@@ -38,6 +39,17 @@ func InitEmbeddedModules() {
 			log.Debug(" ", k)
 		}
 	}
+}
+
+// Lists the modules of specified type
+func ModulesList(typ string) (out []string) {
+	typ = typ + "/"
+	for key, _ := range modules_cache {
+		if strings.HasPrefix(key, typ) {
+			out = append(out, key)
+		}
+	}
+	return
 }
 
 // Checks if the module is available

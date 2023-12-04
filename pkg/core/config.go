@@ -17,10 +17,13 @@ type CommonConfig struct {
 type PlaybookConfig struct {
 	CommonConfig
 
-	ExtraVars []string `json:"extra_vars"` // Additional variables to use during execution
-	SkipTags  []string `json:"skip_tags"`  // Skips tasks with provided tags
+	// Additional variables to use during execution
+	ExtraVars map[string]any `json:"extra_vars"`
+	// Skips tasks with provided tags
+	SkipTags []string `json:"skip_tags"`
 
-	Inventory *inventory.Inventory `json:"inventory"` // Parsed inventory data
+	// Parsed inventory data
+	Inventory *inventory.Inventory `json:"inventory"`
 }
 
 // Agent execution config

@@ -12,25 +12,38 @@ import (
 )
 
 type Task struct {
-	Name        string      `yaml:",omitempty"`
+	// Identifier. Can be used for documentation, in or tasks/handlers.
+	Name string `yaml:",omitempty"`
+	// A dictionary that gets converted into environment vars to be provided for the task upon execution. This cannot affect Ansible itself nor its configuration, it just sets the variables for the code responsible for executing the task.
 	Environment *OrderedMap `yaml:",omitempty"`
 
-	When     string      `yaml:",omitempty"` // Only string right now, array looks confusing
-	Become   bool        `yaml:",omitempty"`
-	Vars     *OrderedMap `yaml:",omitempty"`
-	Register string      `yaml:",omitempty"`
+	// Conditional expression, determines if an iteration of a task is run or not.
+	When string `yaml:",omitempty"` // Only string right now, array looks confusing
+	// Boolean that controls if privilege escalation is used or not on Task execution.
+	Become bool `yaml:",omitempty"`
+	// Dictionary/map of variables
+	Vars *OrderedMap `yaml:",omitempty"`
+	// Name of variable that will contain task status and module return data.
+	Register string `yaml:",omitempty"`
 
-	With_items []string    `yaml:",omitempty"`
-	With_dict  *OrderedMap `yaml:",omitempty"`
-
+	// Host to execute task instead of the target (inventory_hostname). Connection vars from the delegated host will also be used for the task.
+	Delegate_to string `yaml:",omitempty"`
+	// Conditional expression that overrides the task’s normal ‘failed’ status.
 	Failed_when string `yaml:",omitempty"`
+
+	// Loop through list of items
+	With_items []string `yaml:",omitempty"`
+	// Loop through dict key value
+	With_dict *OrderedMap `yaml:",omitempty"`
 
 	// TODO: Actually block could be potentally a task module, but for now in v1 it's just a
 	// special case of task. Maybe in v2 it will be possible to pass yaml nodes to the tasks to
 	// properly process subtasks of block, who knows...
 	Block []*Task `yaml:",omitempty"` // Special case, contains list of tasks to execute
 
-	ModuleName string          `yaml:"-"`
+	// Found task module name
+	ModuleName string `yaml:"-"`
+	// Loaded implementation of the task module
 	ModuleData TaskV1Interface `yaml:"-"`
 }
 
@@ -194,19 +207,38 @@ func (t *Task) MarshalYAML() (interface{}, error) {
 	return node, nil
 }
 
-func (t *Task) Run(vars map[string]any) error {
+func (t *Task) Run(vars map[string]any) (data OrderedMap, err error) {
 	if len(t.Block) > 0 {
 		if t.Name != "" {
 			log.Warnf("Executing task block '%s'", t.Name)
 		}
 		for _, task := range t.Block {
-			if err := task.Run(vars); err != nil {
-				return err
+			if _, err = task.Run(vars); err != nil {
+				return
 			}
 		}
 	} else {
-		log.Infof("Executing task '%s'", t.Name)
-		t.ModuleData.Run(vars)
+		// In case need to be executed remotely - route task to the proper transport
+		if t.IsRemote(vars) {
+			log.Infof("TODO: Executing task '%s' remotely", t.Name)
+		} else {
+			log.Infof("Executing task '%s'", t.Name)
+			return t.ModuleData.Run(vars)
+		}
 	}
-	return nil
+	return
+}
+
+func (t *Task) IsRemote(vars map[string]any) bool {
+	if t.Delegate_to == "localhost" {
+		return false
+	}
+	if t.Delegate_to == "" {
+		// Refer to the variables
+		if val, ok := vars["ansible_connection"]; ok && val.(string) == "local" {
+			return false
+		}
+	}
+
+	return true
 }
