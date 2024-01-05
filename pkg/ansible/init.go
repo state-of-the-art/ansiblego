@@ -46,6 +46,7 @@ func init() {
 	// Import the TaskV1 interface
 	imports.Packages["github.com/state-of-the-art/ansiblego/pkg/ansible"] = imports.Package{
 		Binds: map[string]reflect.Value{
+			"CollectV1":     reflect.ValueOf(CollectV1),
 			"TaskV1SetData": reflect.ValueOf(TaskV1SetData),
 			"TaskV1GetData": reflect.ValueOf(TaskV1GetData),
 			"ModulesList":   reflect.ValueOf(ModulesList),

@@ -4,7 +4,7 @@
 # TODO: Using gz for now due to upx isn't working on macos
 # as expected and seems related to the code signature issues.
 # GZ is used due to it's speed, compatibility and quite small binary size.
-# You can set it to 'raw', 'upx' or 'xz' too
+# You can set it to 'raw', 'upx' or 'xz' as well
 [ "x${PKG_SUFFIX}" != 'x' ] || PKG_SUFFIX='gz'  # To use general xz archiver
 
 name=ansiblego
@@ -13,10 +13,15 @@ suffixes="linux-amd64 linux-arm64 windows-amd64 darwin-amd64 darwin-arm64"
 # Running static code checks
 ./check.sh
 
+# Disabling cgo in order to not link with libc and utilize static linkage binaries
+# which will help to not relay on glibc on linux and be truely independend from OS
+export CGO_ENABLED=0
+
 for suffix in $suffixes; do
     echo "--> Build binary for ${suffix}"
+    # Utilizing a number of optimizations to reduce the exec binary size
     GOOS="$(echo "${suffix}" | cut -d- -f1)" GOARCH="$(echo "${suffix}" | cut -d- -f2)" \
-        go build -ldflags="-s -w" -a -o "${name}.raw.${suffix}" "./cmd/${name}" &
+        go build -ldflags="-s -w" -gcflags=all="-l -B" -a -o "${name}.raw.${suffix}" "./cmd/${name}" &
 done
 wait
 

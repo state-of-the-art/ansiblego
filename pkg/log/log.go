@@ -27,7 +27,7 @@ var (
 
 func init() {
 	// Init default loggers
-	InitLoggers()
+	InitLoggers(os.Stderr)
 }
 
 func SetVerbosity(level string) error {
@@ -49,7 +49,7 @@ func SetVerbosity(level string) error {
 	return nil
 }
 
-func InitLoggers() error {
+func InitLoggers(output *os.File) error {
 	flags := log.Lmsgprefix
 
 	// Showing short file for debug verbosity
@@ -59,11 +59,11 @@ func InitLoggers() error {
 		flags |= log.Ldate | log.Ltime
 	}
 
-	TraceLogger = log.New(os.Stdout, "TRACE:\t", flags)
-	DebugLogger = log.New(os.Stdout, "DEBUG:\t", flags)
-	InfoLogger = log.New(os.Stdout, "INFO :\t", flags)
-	WarnLogger = log.New(os.Stdout, "WARN :\t", flags)
-	ErrorLogger = log.New(os.Stdout, "ERROR:\t", flags)
+	TraceLogger = log.New(output, "TRACE:\t", flags)
+	DebugLogger = log.New(output, "DEBUG:\t", flags)
+	InfoLogger = log.New(output, "INFO :\t", flags)
+	WarnLogger = log.New(output, "WARN :\t", flags)
+	ErrorLogger = log.New(output, "ERROR:\t", flags)
 
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 // of tasks anyhow.
 type Transport interface {
 	Execute(cmd string, stdout, stderr io.Writer) (err error)
+	ExecuteInput(cmd string, stdin io.Reader, stdout, stderr io.Writer) (err error)
 
 	Check() (kernel, arch string, err error)
 

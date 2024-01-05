@@ -61,6 +61,14 @@ func (tr *TransportWinRM) Execute(cmd string, stdout, stderr io.Writer) (err err
 	return nil
 }
 
+func (tr *TransportWinRM) ExecuteInput(cmd string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
+	_, err = tr.client.RunWithInput(cmd, stdout, stderr, stdin)
+	if err != nil {
+		return fmt.Errorf("Failed to run command: %v", err)
+	}
+	return nil
+}
+
 func (tr *TransportWinRM) Check() (kernel, arch string, err error) {
 	// TODO: most of the time it's true, but who knows those
 	// poor things who runs winrm server on linux/mac...

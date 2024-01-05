@@ -21,7 +21,7 @@ func RunCommand(timeout time.Duration, path string, arg ...string) (string, stri
 
 	cmd := exec.CommandContext(ctx, path, arg...)
 
-	log.Debug("Executing:", cmd.Path, strings.Join(cmd.Args[1:], " "))
+	log.Trace("Executing:", cmd.Path, strings.Join(cmd.Args[1:], " "))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
@@ -42,10 +42,10 @@ func RunCommand(timeout time.Duration, path string, arg ...string) (string, stri
 	}
 
 	if len(stdoutString) > 0 {
-		log.Debug("stdout:", stdoutString)
+		log.Trace("stdout:", stdoutString)
 	}
 	if len(stderrString) > 0 {
-		log.Debug("stderr:", stderrString)
+		log.Trace("stderr:", stderrString)
 	}
 
 	// Replace these for Windows, we only want to deal with Unix style line endings.

@@ -6,6 +6,7 @@ require (
 	github.com/MarioJim/gonja v1.5.4
 	github.com/bramvdbogaerde/go-scp v1.2.0
 	github.com/cosmos72/gomacro v0.0.0-20231110175219-232ceb1c4098
+	github.com/creasty/defaults v1.7.0
 	github.com/masterzen/winrm v0.0.0-20220513085036-69f69afcd9e9
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/relex/aini v1.6.0

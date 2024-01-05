@@ -3,6 +3,7 @@ package ansible
 import (
 	"io/ioutil"
 
+	"github.com/creasty/defaults"
 	"gopkg.in/yaml.v3"
 
 	"github.com/state-of-the-art/ansiblego/pkg/ansible/inventory"
@@ -12,7 +13,7 @@ import (
 
 type Playbook struct {
 	Name         string      `yaml:",omitempty"`
-	Gather_facts bool        `yaml:",omitempty"`
+	Gather_facts bool        `default:"true" yaml:",omitempty"`
 	Environment  *OrderedMap `yaml:",omitempty"`
 
 	Pre_tasks []*Task `yaml:",omitempty"`
@@ -33,18 +34,33 @@ func (p *Playbook) Yaml() (string, error) {
 func (p *Playbook) Run(cfg *core.PlaybookConfig, host *inventory.Host) (err error) {
 	log.Infof("Running playbook '%s' on host '%s'...", p.Name, host.Name)
 
-	// TODO: Connect to the host and get the facts
-	facts := make(map[string]any)
-	if p.Gather_facts {
-		log.Error("TODO: connect to host and get facts")
-	}
-
-	// TODO: Prepare variables
+	// Collecting variables
 	vars := make(map[string]any)
-	vars["ansible_facts"] = facts
 	p.fillVariables(cfg, host, vars)
 
-	// TODO: Collect tasks & roles to run and run one-by-one
+	// Getting facts and store them in vars
+	if p.Gather_facts {
+		facts := make(map[string]any)
+		module_data, err := GetTaskV1("setup")
+		if err != nil {
+			return log.Errorf("Unable to find 'setup' task: %v", err)
+		}
+		facts_task := Task{
+			Name:       "Getting playbook facts",
+			ModuleName: "setup",
+			ModuleData: module_data,
+		}
+		data, err := facts_task.Run(vars)
+		if err != nil {
+			return log.Errorf("Error during getting target facts for playbook: %v", err)
+		}
+		for _, key := range data.Keys() {
+			facts[key], _ = data.Get(key)
+		}
+		vars["ansible_facts"] = facts
+	}
+
+	// Running tasks & roles
 	for _, task := range p.Pre_tasks {
 		if _, err = task.Run(vars); err != nil {
 			return log.Errorf("Error during playbook execution: %v", err)
@@ -94,14 +110,32 @@ func (p *Playbook) Run(cfg *core.PlaybookConfig, host *inventory.Host) (err erro
 // 21. include params
 // 22. extra vars (always win precedence)
 func (p *Playbook) fillVariables(cfg *core.PlaybookConfig, host *inventory.Host, vars map[string]any) {
+	// 00. Filling defaults
+	vars["ansible_connection"] = "ssh"
+
 	// 03. Adding host variables from inventory
 	for key, val := range host.Vars {
+		log.Tracef("Setting host var '%s': %q", key, val)
 		vars[key] = val
 	}
+
 	// 22. Setting extra vars
 	for key, val := range cfg.ExtraVars {
+		log.Tracef("Setting extra var '%s': %q", key, val)
 		vars[key] = val
 	}
+}
+
+// Allows to set defaults from struct definition
+func (p *Playbook) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	defaults.Set(p)
+
+	type plain Playbook
+	if err := unmarshal((*plain)(p)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (pf *PlaybookFile) Load(yml_path string) error {

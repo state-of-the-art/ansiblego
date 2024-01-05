@@ -3,6 +3,7 @@ package ansible
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 
 	"github.com/cosmos72/gomacro/fast"
@@ -20,9 +21,12 @@ func factInterp(name string) (*fast.Interp, error) {
 	// Creating new interp
 	interp = fast.New()
 
-	// Discard interp warnings
 	if log.Verbosity < log.DEBUG {
+		// Discard interp warnings on non-debug verbosity
 		interp.Comp.Globals.Output.Stderr = ioutil.Discard
+	} else {
+		// Storing interp messages to stderr to not mess up the return messages
+		interp.Comp.Globals.Output.Stderr = os.Stderr
 	}
 
 	// Allow just the known gomacro imports.Packages to be imported
@@ -45,6 +49,7 @@ func factInterp(name string) (*fast.Interp, error) {
 		mod_path := fmt.Sprintf(path, name)
 		f, err := modules.Open(mod_path)
 		if err != nil {
+			log.Tracef("Unable to read module path: %s", mod_path)
 			continue
 		}
 

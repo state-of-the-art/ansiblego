@@ -18,7 +18,7 @@ type TransportSSH struct {
 	config *ssh.ClientConfig
 }
 
-func New(user, pass, host string, port int) (*TransportSSH, error) {
+func NewPass(user, pass, host string, port int) (*TransportSSH, error) {
 	tr := &TransportSSH{
 		host: host,
 		port: port,
@@ -32,6 +32,35 @@ func New(user, pass, host string, port int) (*TransportSSH, error) {
 
 	if _, _, err := tr.Check(); err != nil {
 		return nil, err
+	}
+
+	return tr, nil
+}
+
+func NewKey(user, key_path, host string, port int) (*TransportSSH, error) {
+	key, err := os.ReadFile(key_path)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read ssh key file: %v", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to parse private key: %v", err)
+	}
+
+	tr := &TransportSSH{
+		host: host,
+		port: port,
+		config: &ssh.ClientConfig{
+			User: user,
+			Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
+
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		},
+	}
+
+	if _, _, err := tr.Check(); err != nil {
+		return nil, fmt.Errorf("Unable to verify ssh connection: %v", err)
 	}
 
 	return tr, nil
@@ -60,6 +89,27 @@ func (tr *TransportSSH) Execute(cmd string, stdout, stderr io.Writer) (err error
 	defer client.Close()
 	defer session.Close()
 
+	stdout_pipe, _ := session.StdoutPipe()
+	go io.Copy(stdout, stdout_pipe)
+	stderr_pipe, _ := session.StderrPipe()
+	go io.Copy(stderr, stderr_pipe)
+	err = session.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("Failed to run command: %v", err)
+	}
+	return nil
+}
+
+func (tr *TransportSSH) ExecuteInput(cmd string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
+	client, session, err := tr.connect()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	defer session.Close()
+
+	stdin_pipe, _ := session.StdinPipe()
+	go io.Copy(stdin_pipe, stdin)
 	stdout_pipe, _ := session.StdoutPipe()
 	go io.Copy(stdout, stdout_pipe)
 	stderr_pipe, _ := session.StderrPipe()

@@ -3,12 +3,18 @@ package ansible
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/state-of-the-art/ansiblego/pkg/embedbin"
 	"github.com/state-of-the-art/ansiblego/pkg/log"
+	"github.com/state-of-the-art/ansiblego/pkg/transport"
+	"github.com/state-of-the-art/ansiblego/pkg/transport/ssh"
+	"github.com/state-of-the-art/ansiblego/pkg/transport/winrm"
 )
 
 type Task struct {
@@ -21,7 +27,7 @@ type Task struct {
 	When string `yaml:",omitempty"` // Only string right now, array looks confusing
 	// Boolean that controls if privilege escalation is used or not on Task execution.
 	Become bool `yaml:",omitempty"`
-	// Dictionary/map of variables
+	// Dictionary/map of variables specified in task
 	Vars *OrderedMap `yaml:",omitempty"`
 	// Name of variable that will contain task status and module return data.
 	Register string `yaml:",omitempty"`
@@ -220,12 +226,110 @@ func (t *Task) Run(vars map[string]any) (data OrderedMap, err error) {
 	} else {
 		// In case need to be executed remotely - route task to the proper transport
 		if t.IsRemote(vars) {
-			log.Infof("TODO: Executing task '%s' remotely", t.Name)
+			log.Infof("Executing task '%s' remotely", t.Name)
+			var client transport.Transport
+
+			if vars["ansible_connection"] == "ssh" {
+				user, ok1 := vars["ansible_ssh_user"].(string)
+				host, ok2 := vars["ansible_ssh_host"].(string)
+				port_str, ok3 := vars["ansible_ssh_port"].(string)
+				if !(ok1 && ok2 && ok3) {
+					return data, log.Error("Unable to get the necessary vars to connect via SSH")
+				}
+
+				port, err := strconv.Atoi(port_str)
+				if err != nil {
+					return data, log.Errorf("Unable to use non-int port: %q", port_str)
+				}
+
+				log.Debugf("Connecting via SSH to '%s@%s:%d'", user, host, port)
+
+				// Check if password or key provided and create needed ssh connection
+				if password, ok4 := vars["ansible_password"].(string); ok4 {
+					if client, err = ssh.NewPass(user, password, host, port); err != nil {
+						return data, log.Error("Unable to connect to SSH by password:", err)
+					}
+				} else if password, ok4 := vars["ansible_ssh_private_key_file"].(string); ok4 {
+					if client, err = ssh.NewKey(user, password, host, port); err != nil {
+						return data, log.Error("Unable to connect to SSH by key:", err)
+					}
+				} else {
+					return data, log.Error("Unable to get password or key to connect via SSH")
+				}
+			} else if vars["ansible_connection"] == "winrm" {
+				user, ok1 := vars["ansible_winrm_user"].(string)
+				password, ok2 := vars["ansible_winrm_password"].(string)
+				host, ok3 := vars["ansible_winrm_host"].(string)
+				port_str, ok4 := vars["ansible_winrm_port"].(string)
+				if !(ok1 && ok2 && ok3 && ok4) {
+					return data, log.Error("Unable to get the necessary vars to connect via WinRM")
+				}
+
+				port, err := strconv.Atoi(port_str)
+				if err != nil {
+					return data, log.Errorf("Unable to use non-int port: %q", port_str)
+				}
+
+				log.Debugf("Connecting via WinRM to '%s@%s:%d'", user, host, port)
+
+				if client, err = winrm.New(user, password, host, port); err != nil {
+					return data, log.Error("Unable to connect to WinRM:", err)
+				}
+				/*kern, arch, err := client.Check()
+				if err != nil {
+					return data, log.Error("Failed to execute WinRM check:", err)
+				}
+				log.Info("WinRM Remote system is:", kern, arch)
+
+				if err := client.Execute("ipconfig /all", os.Stdout, os.Stderr); err != nil {
+					return data, log.Error("Failed to execute command over WinRM:", err)
+				}
+
+				// WinRM Embed binary test
+				embed_fd, err := embedbin.GetEmbeddedBinary(kern, arch)
+				if err != nil {
+					return data, log.Error("Unable to find required binary for remote system:", err)
+				}
+				defer embed_fd.Close()
+
+				// Copy embed file with WinRM
+				if err := client.Copy(embed_fd, "C:\\ansiblego.exe", 0750); err != nil {
+					return data, log.Error("Failed to execute command over WinRM:", err)
+				}*/
+			} else {
+				return data, log.Errorf("Unable to find connection plugin for %q", vars["ansible_connection"])
+			}
+
+			// Getting the system info
+			kern, arch, err := client.Check()
+			if err != nil {
+				return data, log.Error("Failed to execute remote system check:", err)
+			}
+			log.Debug("Remote system is:", kern, arch)
+
+			// Getting fitting embed ansiblego exec data
+			embed_fd, err := embedbin.GetEmbeddedBinary(kern, arch)
+			if err != nil {
+				return data, log.Error("Unable to find ansiblego binary for target system:", err)
+			}
+			defer embed_fd.Close()
+
+			// Copy embed file to the target system
+			if err := client.Copy(embed_fd, "/tmp/ansiblego", 0750); err != nil {
+				return data, log.Error("Failed to copy ansiblego agent to target system:", err)
+			}
+
+			// TODO: Execute the module via ansiblego agent
+			// Check ansiblego can be running
+			if err := client.Execute("/tmp/ansiblego", os.Stdout, os.Stderr); err != nil {
+				return data, log.Error("Failed to execute ansiblego agent:", err)
+			}
 		} else {
-			log.Infof("Executing task '%s'", t.Name)
+			log.Infof("Executing task '%s' locally", t.Name)
 			return t.ModuleData.Run(vars)
 		}
 	}
+
 	return
 }
 
@@ -235,7 +339,7 @@ func (t *Task) IsRemote(vars map[string]any) bool {
 	}
 	if t.Delegate_to == "" {
 		// Refer to the variables
-		if val, ok := vars["ansible_connection"]; ok && val.(string) == "local" {
+		if val, ok := vars["ansible_connection"]; ok && val.(string) == "local" || !ok {
 			return false
 		}
 	}

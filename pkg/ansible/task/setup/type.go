@@ -36,10 +36,11 @@ func (t *TaskV1) GetData() (data ansible.OrderedMap) {
 }
 
 func (t *TaskV1) Run(vars map[string]any) (out ansible.OrderedMap, err error) {
-	log.Error("TODO: Implement setup.Run")
 	for _, mod := range ansible.ModulesList("fact") {
+		log.Tracef("Running fact collector %q...", mod)
 		if collected_facts, err := ansible.CollectV1(mod); err == nil {
 			for _, key := range collected_facts.Keys() {
+				log.Tracef("Received data key from fact collector %q: %q", mod, key)
 				if _, exists := out.Get(key); exists {
 					log.Warnf("Fact module '%s' overrides existing fact '%s'", mod, key)
 				}
@@ -48,9 +49,9 @@ func (t *TaskV1) Run(vars map[string]any) (out ansible.OrderedMap, err error) {
 			}
 		} else {
 			// Fact collectors can fail, but it should not be a disaster
-			err = log.Errorf("Error while collecting facts from '%s': %s", mod, err)
+			err = log.Errorf("Error while collecting facts from %q: %v", mod, err)
 		}
 	}
 
-	return
+	return out, err
 }

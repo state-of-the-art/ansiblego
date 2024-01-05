@@ -6,6 +6,7 @@ package ansible
 import (
 	"embed"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/cosmos72/gomacro/fast"
@@ -33,10 +34,18 @@ func InitEmbeddedModules() {
 			modules_cache[path.Join(mtype.Name(), name)] = nil
 		}
 	}
-	if log.Verbosity == log.DEBUG {
+	if log.Verbosity >= log.DEBUG {
+		// Print sorted modules
 		log.Debug("Embedded modules:", len(modules_cache))
+		i := 0
+		keys := make([]string, len(modules_cache))
 		for k, _ := range modules_cache {
-			log.Debug(" ", k)
+			keys[i] = k
+			i++
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			log.Debug("  ", k)
 		}
 	}
 }
@@ -46,7 +55,7 @@ func ModulesList(typ string) (out []string) {
 	typ = typ + "/"
 	for key, _ := range modules_cache {
 		if strings.HasPrefix(key, typ) {
-			out = append(out, key)
+			out = append(out, key[len(typ):])
 		}
 	}
 	return
