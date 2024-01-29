@@ -37,6 +37,10 @@ func (om *OrderedMap) Set(key string, value any) {
 	om.order = append(om.order, key)
 }
 
+func (om *OrderedMap) Data() map[string]any {
+	return om.data
+}
+
 func (om *OrderedMap) Get(key string) (any, bool) {
 	v, ok := om.data[key]
 	return v, ok

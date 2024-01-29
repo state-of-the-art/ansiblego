@@ -11,23 +11,23 @@ import (
 
 type TaskV1 struct {
 	// Path of the file to link to.
-	Src string
+	Src ansible.TString
 	// Path to the file being managed.
-	Path string `task:",req,alias:dest,alias:name"`
+	Path ansible.TString `task:",req,alias:dest,alias:name"`
 	// State of the file in the end
-	State string `task:",def:file,list:absent directory file hard link touch"`
+	State ansible.TString `task:",def:file,list:absent directory file hard link touch"`
 
 	// Name of the user that should own the file/directory, as would be fed to chown.
-	Owner string
+	Owner ansible.TString
 	// Name of the group that should own the file/directory, as would be fed to chown.
-	Group string
+	Group ansible.TString
 	// The permissions the resulting file or directory should have.
-	Mode string
+	Mode ansible.TString
 
 	// Recursively set the specified file attributes on directory contents.
-	Recurse bool
+	Recurse ansible.TBool
 	// This flag indicates that filesystem links, if they exist, should be followed.
-	Follow bool `task:",def:true"`
+	Follow ansible.TBool `task:",def:true"`
 
 	// This parameter indicates the time the file's access time should be set to.
 	//Access_time        string
@@ -56,12 +56,13 @@ type TaskV1 struct {
 	//Seuser  string
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	file_data, ok := data.Get("file")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	d, ok := data.Pop("file")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'file' map in task data")
 	}
-	fmap, ok := file_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'file' is not the OrderedMap")
 	}

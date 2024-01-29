@@ -13,7 +13,7 @@ import (
 
 type TaskV1Interface interface {
 	Run(vars map[string]any) (OrderedMap, error)
-	SetData(data OrderedMap) error
+	SetData(data *OrderedMap) error
 	GetData() OrderedMap
 }
 
@@ -23,13 +23,13 @@ type P_TaskV1Interface struct {
 	Object   any
 	GetData_ func(_obj_ any) OrderedMap
 	Run_     func(_obj_ any, vars map[string]any) (OrderedMap, error)
-	SetData_ func(_obj_ any, data OrderedMap) error
+	SetData_ func(_obj_ any, data *OrderedMap) error
 }
 
 func (P *P_TaskV1Interface) GetData() OrderedMap {
 	return P.GetData_(P.Object)
 }
-func (P *P_TaskV1Interface) SetData(data OrderedMap) error {
+func (P *P_TaskV1Interface) SetData(data *OrderedMap) error {
 	return P.SetData_(P.Object, data)
 }
 func (P *P_TaskV1Interface) Run(vars map[string]any) (OrderedMap, error) {
@@ -41,7 +41,7 @@ type TaskV1Default struct {
 	Args OrderedMap // Various arguments for the particular task
 }
 
-func (t *TaskV1Default) SetData(data OrderedMap) error {
+func (t *TaskV1Default) SetData(data *OrderedMap) error {
 	// TODO
 	return nil
 }

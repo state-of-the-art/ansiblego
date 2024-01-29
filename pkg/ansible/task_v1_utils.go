@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/state-of-the-art/ansiblego/pkg/template"
 )
 
 // TaskV1 struct field tags: `task:"[NAME][,OPTS]"`
@@ -33,7 +31,7 @@ func TaskV1SetData(task_ptr any, fmap OrderedMap) error {
 		return fmt.Errorf("Unable to set data for non-struct: %s", rtype.Kind())
 	}
 
-	// Processing the fields
+	// Processing the known task fields
 	rvalue := reflect.ValueOf(task_ptr)
 	for i := 0; i < rtype.NumField(); i++ {
 		fieldt := rtype.Field(i)
@@ -67,58 +65,56 @@ func TaskV1SetData(task_ptr any, fmap OrderedMap) error {
 			}
 		}
 
-		// If it's a list type - make sure the value is available to pick from
-		// TODO: We need to check the value field before run if it's templated
-		if len(info.List) > 0 && !template.IsTemplate(val.(string)) {
-			// Check if the value in the list
-			found := false
-			for _, v := range info.List {
-				if val == v {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("The value of field `%s` is not in the defined list %q", fieldt.Name, info.List)
-			}
+		if !ok {
+			// Skipping not found field
+			continue
 		}
-		if ok {
-			// Ansible really like to mix single value with array usages, so
-			// implementing it here to allow user to set one way or another
-			rfield := rvalue.Elem().Field(i)
-			rval := reflect.ValueOf(val)
-			if rfield.Kind() != rval.Kind() {
-				// Those are not the same types which is alarming, so check if field is an Slice
-				if rfield.Kind() == reflect.Slice && rfield.Type().Elem().Kind() == rval.Kind() {
-					// Ok field is just an array, so set it's first index to the provided value
-					newslice := reflect.MakeSlice(rfield.Type(), 1, 1)
-					newslice.Index(0).Set(rval)
-					rfield.Set(newslice)
-				} else {
-					// Unfortunately the types are incompatible, so probably an error in playbook?
-					return fmt.Errorf("Unable to set the field `%s` of type %s to value: %q of type %s", key, rfield.Type(), val, rval.Type())
+
+		rfield := rvalue.Elem().Field(i)
+
+		// Check the field type is ansible T-one
+		if !strings.HasPrefix(rfield.Type().Name(), "T") {
+			return fmt.Errorf("Unable to process field %q type %q - only T-types should be used", fieldt.Name, rfield.Type().Name())
+		}
+
+		/*for i := 0; i < rfield.Interface().Type().NumMethod(); i++ {
+			fmt.Println("!!DEBUG:", rfield.Interface().Type().Method(i).Name)
+		}*/
+
+		rval := reflect.ValueOf(val)
+		rfield.Interface().MethodByName("SetUnknown").Call([]reflect.Value{rval})
+
+		/*if rfield.Kind() != rval.Kind() {
+			// Those are not the same types which is alarming, so check if field is an Slice
+			if rfield.Kind() == reflect.Slice && rfield.Type().Elem().Kind() == rval.Kind() {
+				// Ok field is just an array, so set it's first index to the provided value
+				newslice := reflect.MakeSlice(rfield.Type(), 1, 1)
+				newslice.Index(0).Set(rval)
+				rfield.Set(newslice)
+			} else {
+				// Unfortunately the types are incompatible, so probably an error in playbook?
+				return fmt.Errorf("Unable to set the field `%s` of type %s to value: %q of type %s", key, rfield.Type(), val, rval.Type())
+			}
+		} else {
+			// They could be two slices, but different types of elements - so checking that
+			if rfield.Kind() == reflect.Slice && rfield.Type().Elem().Kind() != rval.Type().Elem().Kind() {
+				// Aha, they are slices and element types are different, so try to convert
+				if !rval.IsNil() && rval.Len() > 0 { // If it's empty - then nothing to set
+					if rval.Index(0).Kind() == reflect.Interface && rval.Index(0).Elem().Type() == rfield.Type().Elem() {
+						for i := 0; i < rval.Len(); i++ {
+							rfield.Set(reflect.Append(rfield, rval.Index(i).Elem()))
+						}
+					} else {
+						return fmt.Errorf("Unable to set the field `%s` of type %s to value: %q of type %s", key, rfield.Type(), val, rval.Type())
+					}
 				}
 			} else {
-				// They could be two slices, but different types of elements - so checking that
-				if rfield.Kind() == reflect.Slice && rfield.Type().Elem().Kind() != rval.Type().Elem().Kind() {
-					// Aha, they are slices and element types are different, so try to convert
-					if !rval.IsNil() && rval.Len() > 0 { // If it's empty - then nothing to set
-						if rval.Index(0).Kind() == reflect.Interface && rval.Index(0).Elem().Type() == rfield.Type().Elem() {
-							for i := 0; i < rval.Len(); i++ {
-								rfield.Set(reflect.Append(rfield, rval.Index(i).Elem()))
-							}
-						} else {
-							return fmt.Errorf("Unable to set the field `%s` of type %s to value: %q of type %s", key, rfield.Type(), val, rval.Type())
-						}
-					}
-				} else {
-					// The kinds not slices or their elemenet types are the same - so just set field
-					rfield.Set(rval)
-				}
+				// The kinds not slices or their elemenet types are the same - so just set field
+				rfield.Set(rval)
 			}
-			// Remove key from fmap to signal that it's processed
-			fmap.Pop(key)
-		}
+		}*/
+		// Remove key from fmap to signal that it's processed
+		fmap.Pop(key)
 	}
 
 	// Check if fmap still contains not processed keys - it's dangerous to not process them aciddentally
@@ -171,17 +167,19 @@ func TaskV1GetData(task_ptr any) (fmap OrderedMap) {
 
 type fieldInfo struct {
 	Skip bool
-
-	Name string // Name of the field, if not set then lowercase field.Name will be here
-
-	Aliases []string // Aliases for the field to check if no main field is set
-
-	Default    bool // Set the default value if the field is not set
+	// Name of the field, if not set then lowercase field.Name will be here
+	Name string
+	// Aliases for the field to check if no main field is set
+	// Max 5 to keep the info comparable to use TString in maps keys
+	Aliases [5]string
+	// Set the default value if the field is not set
+	Default    bool
 	DefaultVal any
-
-	Required bool // If the field is required to be set no matter what
-
-	List []string // Only listed items are available to be set as value
+	// If the field is required to be set no matter what
+	Required bool
+	// List of available values to set value into, separated by space
+	// Max 32 to keep the info comparable to use TString in maps keys
+	List [32]string
 }
 
 // Get information from the TaskV1 field tags, useful when processing semi-automatically
@@ -204,12 +202,13 @@ func TaskV1FieldInfo(field *reflect.StructField) (info fieldInfo, err error) {
 	}
 
 	fields := strings.Split(tag, ",")
+	var aliases []string
 	if len(fields) > 1 {
 		for _, flag := range fields[1:] {
 			kv := strings.SplitN(flag, ":", 2)
 			switch kv[0] {
 			case "alias":
-				info.Aliases = append(info.Aliases, kv[1])
+				aliases = append(aliases, kv[1])
 			case "def":
 				info.Default = true
 				switch field.Type.Kind() {
@@ -227,7 +226,8 @@ func TaskV1FieldInfo(field *reflect.StructField) (info fieldInfo, err error) {
 					return info, fmt.Errorf("Unsupported default value for field `%s` type '%s'", field.Name, field.Type.Kind())
 				}
 			case "list":
-				info.List = strings.Split(kv[1], " ")
+				lst := strings.Split(kv[1], " ")
+				copy(info.List[:], lst)
 			case "req":
 				info.Required = true
 			default:
@@ -235,6 +235,9 @@ func TaskV1FieldInfo(field *reflect.StructField) (info fieldInfo, err error) {
 			}
 		}
 		tag = fields[0]
+	}
+	if len(aliases) > 0 {
+		copy(info.Aliases[:], aliases)
 	}
 
 	if tag != "" {

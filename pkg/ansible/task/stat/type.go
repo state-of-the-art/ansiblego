@@ -11,10 +11,10 @@ import (
 
 type TaskV1 struct {
 	// Path to the file being managed.
-	Path string `task:",req,alias:dest,alias:name"`
+	Path ansible.TString `task:",req,alias:dest,alias:name"`
 
 	// Algorithm to determine checksum of file.
-	Checksum_algorithm string `task:",alias:checksum,alias:checksum_algo,def:sha1,list:md5 sha1 sha224 sha256 sha384 sha512"`
+	Checksum_algorithm ansible.TString `task:",alias:checksum,alias:checksum_algo,def:sha1,list:md5 sha1 sha224 sha256 sha384 sha512"`
 
 	// Whether to follow symlinks.
 	//Follow bool
@@ -26,12 +26,13 @@ type TaskV1 struct {
 	//Get_mime bool `task:",def:true,alias:mime,alias:mime_type,alias:mime-type"`
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	stat_data, ok := data.Get("stat")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	d, ok := data.Pop("stat")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'stat' map in task data")
 	}
-	fmap, ok := stat_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'stat' is not the OrderedMap")
 	}

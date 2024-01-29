@@ -11,7 +11,7 @@ import (
 
 type TaskV1 struct {
 	// The name of the role to be executed.
-	Name string `task:",req"`
+	Name ansible.TString `task:",req"`
 
 	// Overrides the role's metadata setting to allow using a role more than once with the same parameters.
 	//Allow_duplicates bool `task:",def:true"`
@@ -32,12 +32,13 @@ type TaskV1 struct {
 	//Public bool
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	role_data, ok := data.Get("include_role")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	d, ok := data.Pop("include_role")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'include_role' map in task data")
 	}
-	fmap, ok := role_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'include_role' is not the OrderedMap")
 	}

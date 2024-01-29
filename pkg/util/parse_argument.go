@@ -56,6 +56,7 @@ func ParseArgument(desc, option string, yaml_decoder *yaml.Decoder) (out map[str
 	if len(kv) < 2 {
 		return out, fmt.Errorf("No value provided for %s: %v", desc, kv[0])
 	}
+	out = make(map[string]any)
 	out[kv[0]] = kv[1]
 	log.Tracef("Provided extra var: %q=%q", kv[0], kv[1])
 

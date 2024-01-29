@@ -207,7 +207,7 @@ func runTask(name string, args ansible.OrderedMap, vars map[string]any) error {
 	if err != nil {
 		return log.Errorf("Unable to find %q task: %v", name, err)
 	}
-	if err = module_data.SetData(args); err != nil {
+	if err = module_data.SetData(&args); err != nil {
 		return log.Errorf("Unable to set data for task module `%s`: %s", name, err)
 	}
 

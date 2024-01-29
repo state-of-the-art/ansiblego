@@ -11,15 +11,16 @@ import (
 
 type TaskV1 struct {
 	// Storage for key:value to process
-	keyval ansible.OrderedMap
+	keyval ansible.TAnyMap
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	role_data, ok := data.Get("set_fact")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	d, ok := data.Pop("set_fact")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'set_fact' map in task data")
 	}
-	fmap, ok := role_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'set_fact' is not the OrderedMap")
 	}
@@ -29,7 +30,14 @@ func (t *TaskV1) SetData(data ansible.OrderedMap) error {
 	}
 
 	// Store data for further processing during Run
-	t.keyval = fmap
+	t.keyval = make(ansible.TAnyMap, fmap.Size())
+	for key, val := range fmap.Data() {
+		k := ansible.TString{}
+		k.SetUnknown(key)
+		v := ansible.TAny{}
+		v.SetUnknown(val)
+		t.keyval[k] = v
+	}
 
 	return nil
 }

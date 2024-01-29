@@ -13,11 +13,14 @@ import (
 )
 
 type TaskV1 struct {
-	Cmd   string   // Executable to run.
-	Argv  []string // Arguments of the executable.
-	Chdir string   // Change into this directory before running the command.
+	// Executable to run.
+	Cmd ansible.TString `task:",req"`
+	// Arguments of the executable.
+	Argv ansible.TStringList
+	// Change into this directory before running the command.
+	Chdir ansible.TString
 	// Set the stdin of the command directly to the specified value.
-	Stdin string
+	Stdin ansible.TString
 
 	// A filename or glob pattern. If it already exists, this step won't be run.
 	//Creates string
@@ -25,9 +28,9 @@ type TaskV1 struct {
 	//Removes string
 
 	// If set to true, append a newline to stdin data.
-	Stdin_add_newline bool `task:",def:true"`
+	Stdin_add_newline ansible.TBool `task:",def:true"`
 	// Strip empty lines from the end of stdout/stderr in result.
-	Strip_empty_ends bool `task:",def:true"`
+	Strip_empty_ends ansible.TBool `task:",def:true"`
 
 	// Enable or disable task warnings.
 	//Warn bool `task:",def:true"`
@@ -36,40 +39,39 @@ type TaskV1 struct {
 	command_is_string bool // In case the command originally is string
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	command_data, ok := data.Get("command")
+func (t *TaskV1) SetData(data *ansible.OrderedMap) (err error) {
+	d, ok := data.Pop("command")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'command' string or map in task data")
 	}
-	fmap, ok := command_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		// "command" not a map
 		var cmdline string
-		cmdline, ok = command_data.(string)
+		cmdline, ok = d.(string)
 		if ok {
 			// "command" is a string
 			t.command_is_string = true
-			cmdsplit := strings.Split(cmdline, " ")
-			t.Cmd = cmdsplit[0]
-			if len(cmdsplit) > 1 {
-				t.Argv = cmdsplit[1:]
-			}
+			t.Cmd.SetUnknown(cmdline)
 			// Args are confusing and instead module need to be used, so skip processing
 			/*if args_data, ok := data.Get("args"); ok {
 				fmap, _ = args_data.(ansible.OrderedMap)
 			}*/
+		} else {
+			return fmt.Errorf("Command cmdline is not string: %v", d)
 		}
 	}
 	if !ok {
 		return fmt.Errorf("The 'command' is not string or OrderedMap")
 	}
 	return ansible.TaskV1SetData(t, fmap)
+
 }
 
 func (t *TaskV1) GetData() (data ansible.OrderedMap) {
 	fmap := ansible.TaskV1GetData(t)
 	if t.command_is_string {
-		data.Set("command", strings.Join([]string{t.Cmd, strings.Join(t.Argv, " ")}, " "))
+		data.Set("command", strings.Join([]string{t.Cmd.Val(), strings.Join(t.Argv.Val(), " ")}, " "))
 		// Args are confusing and instead module need to be used, so skip processing
 		/*// Filter out the cmd and vars from the fmap
 		fmap.Pop("argv")
@@ -119,11 +121,11 @@ func runAndLog(cmd *exec.Cmd) (string, string, error) {
 
 func (t *TaskV1) Run(vars map[string]any) (out ansible.OrderedMap, err error) {
 	var cmd *exec.Cmd
-	if t.Cmd != "" {
-		cmd = exec.Command(t.Cmd, t.Argv...)
+	if !t.Cmd.IsEmpty() {
+		cmd = exec.Command(t.Cmd.Val(), t.Argv.Val()...)
 	} else {
 		// If it's just argv then use it's first item as cmd
-		cmd = exec.Command(t.Argv[0], t.Argv[1:]...)
+		cmd = exec.Command(t.Argv.Val()[0], t.Argv.Val()[1:]...)
 	}
 	runAndLog(cmd)
 	log.Error("TODO: Implement command.Run output")

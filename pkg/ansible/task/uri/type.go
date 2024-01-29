@@ -11,17 +11,17 @@ import (
 
 type TaskV1 struct {
 	// HTTP or HTTPS URL in the form (http|https)://host.domain[:port]/path
-	Url string `task:",req"`
+	Url ansible.TString `task:",req"`
 	// The HTTP method of the request or response.
-	Method string `task:",def:GET"`
+	Method ansible.TString `task:",def:GET"`
 
 	// Whether or not the URI module should follow redirects.
-	Follow_redirects string `task:",def:safe,list:all none safe urllib2"`
+	Follow_redirects ansible.TString `task:",def:safe,list:all none safe urllib2"`
 
 	// The socket level timeout in seconds.
-	Timeout int
+	Timeout ansible.TInt
 	// A list of valid, numeric, HTTP status codes that signifies success of the request.
-	Status_code []int
+	Status_code ansible.TIntList
 
 	// Path to file to be submitted to the remote server.
 	//Src string
@@ -88,12 +88,13 @@ type TaskV1 struct {
 	//Seuser  string
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	uri_data, ok := data.Get("uri")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	d, ok := data.Pop("uri")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'uri' map in task data")
 	}
-	fmap, ok := uri_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'uri' is not the OrderedMap")
 	}

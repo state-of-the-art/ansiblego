@@ -3,6 +3,8 @@ package setup
 // Doc: https://docs.ansible.com/ansible/2.9/modules/setup_module.html
 
 import (
+	"fmt"
+
 	"github.com/state-of-the-art/ansiblego/pkg/ansible"
 	"github.com/state-of-the-art/ansiblego/pkg/log"
 )
@@ -18,12 +20,13 @@ type TaskV1 struct {
 	//Gather_timeout int `task:"def:10"`
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	/*role_data, ok := data.Get("setup")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	_, ok := data.Pop("setup")
 	if !ok {
-		return fmt.Errorf("Unable to find the 'setup' map in task data")
+		return fmt.Errorf("Unable to find 'setup' key in task data")
 	}
-	fmap, ok := role_data.(ansible.OrderedMap)
+	/*fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'setup' is not the OrderedMap")
 	}*/

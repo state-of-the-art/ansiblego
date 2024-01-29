@@ -11,10 +11,10 @@ import (
 
 type TaskV1 struct {
 	// A list of package names, like foo, or package specifier with version, like foo=1.0. Name wildcards (fnmatch) like apt* and version wildcards like foo=1.0* are also supported.
-	Name []string `task:",alias:package,alias:pkg"`
+	Name ansible.TStringList `task:",alias:package,alias:pkg"`
 
 	// Run the equivalent of apt-get update before the operation.
-	Update_cache bool
+	Update_cache ansible.TBool
 
 	// Indicates the desired package state.
 	//State string `task:",def:present,list:absent build-dep latest present fixed"`
@@ -51,12 +51,13 @@ type TaskV1 struct {
 	//Purge bool
 }
 
-func (t *TaskV1) SetData(data ansible.OrderedMap) error {
-	apt_data, ok := data.Get("apt")
+// Here the fields comes as complete values never as jinja2 templates
+func (t *TaskV1) SetData(data *ansible.OrderedMap) error {
+	d, ok := data.Pop("apt")
 	if !ok {
 		return fmt.Errorf("Unable to find the 'apt' map in task data")
 	}
-	fmap, ok := apt_data.(ansible.OrderedMap)
+	fmap, ok := d.(ansible.OrderedMap)
 	if !ok {
 		return fmt.Errorf("The 'apt' is not the OrderedMap")
 	}

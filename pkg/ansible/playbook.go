@@ -46,7 +46,7 @@ func (p *Playbook) Run(cfg *core.PlaybookConfig, host *inventory.Host) (err erro
 			return log.Errorf("Unable to find 'setup' task: %v", err)
 		}
 		facts_task := Task{
-			Name:       "Getting playbook facts",
+			Name:       NewTString("Getting playbook facts"),
 			ModuleName: "setup",
 			ModuleData: module_data,
 		}

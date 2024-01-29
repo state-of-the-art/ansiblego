@@ -19,28 +19,28 @@ import (
 
 type Task struct {
 	// Identifier. Can be used for documentation, in or tasks/handlers.
-	Name string `yaml:",omitempty"`
+	Name TString `yaml:",omitempty"`
 	// A dictionary that gets converted into environment vars to be provided for the task upon execution. This cannot affect Ansible itself nor its configuration, it just sets the variables for the code responsible for executing the task.
-	Environment *OrderedMap `yaml:",omitempty"`
+	Environment *TStringMap `yaml:",omitempty"`
 
 	// Conditional expression, determines if an iteration of a task is run or not.
-	When string `yaml:",omitempty"` // Only string right now, array looks confusing
+	When TString `yaml:",omitempty"` // Only string right now, array looks confusing
 	// Boolean that controls if privilege escalation is used or not on Task execution.
-	Become bool `yaml:",omitempty"`
+	Become TBool `yaml:",omitempty"`
 	// Dictionary/map of variables specified in task
-	Vars *OrderedMap `yaml:",omitempty"`
+	Vars *TAnyMap `yaml:",omitempty"`
 	// Name of variable that will contain task status and module return data.
-	Register string `yaml:",omitempty"`
+	Register TString `yaml:",omitempty"`
 
 	// Host to execute task instead of the target (inventory_hostname). Connection vars from the delegated host will also be used for the task.
-	Delegate_to string `yaml:",omitempty"`
+	Delegate_to TString `yaml:",omitempty"`
 	// Conditional expression that overrides the task’s normal ‘failed’ status.
-	Failed_when string `yaml:",omitempty"`
+	Failed_when TString `yaml:",omitempty"`
 
 	// Loop through list of items
-	With_items []string `yaml:",omitempty"`
+	With_items TStringList `yaml:",omitempty"`
 	// Loop through dict key value
-	With_dict *OrderedMap `yaml:",omitempty"`
+	With_dict *TAnyMap `yaml:",omitempty"`
 
 	// TODO: Actually block could be potentally a task module, but for now in v1 it's just a
 	// special case of task. Maybe in v2 it will be possible to pass yaml nodes to the tasks to
@@ -128,12 +128,16 @@ func (t *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 	var task_fields OrderedMap
 	// Searching the unknown fields in yaml map
 	for k, node := range tmp_fields {
-		// Removing prefix for the `win_` field since we have universal ones
+		// Removing prefix for the `win_` field since ansiblego have universal ones
 		if strings.HasPrefix(k, "win_") {
 			log.Warnf("Found win_ prefixed task '%s' - using it without prefix\n", k)
 			k = k[4:]
 		}
+		// If the task struct doesn't have the field with processing key
 		if _, ok := struct_fields[k]; !ok {
+			if ModuleIsTask(k) && len(t.ModuleName) < 1 {
+				t.ModuleName = k
+			}
 			switch node.Kind {
 			case yaml.MappingNode:
 				var val OrderedMap
@@ -147,9 +151,6 @@ func (t *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 					return err
 				}
 				task_fields.Set(k, val)
-			}
-			if ModuleIsTask(k) && len(t.ModuleName) < 1 {
-				t.ModuleName = k
 			}
 		}
 	}
@@ -165,18 +166,17 @@ func (t *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 			return fmt.Errorf("Task module for task `%s` is not implemented:\n%s", t.Name, y)
 		}
 
-		// Filling the task with data
+		// Getting task module
 		t.ModuleData, err = GetTaskV1(t.ModuleName)
 		if err != nil {
 			return fmt.Errorf("Unable to get definition variable from task module `%s`: %s", t.ModuleName, err)
 		}
-		err = t.ModuleData.SetData(task_fields)
+		// Filling module with the provided data
+		// SetData of the module should remove the processed keys
+		err = t.ModuleData.SetData(&task_fields)
 		if err != nil {
 			return fmt.Errorf("Unable to set data for task module `%s`: %s", t.ModuleName, err)
 		}
-
-		// Remove processed task module, to check later if there is something else left...
-		task_fields.Pop(t.ModuleName)
 	}
 
 	// In case there are something else - let's tell user about that, because skipping could do more harm
@@ -191,7 +191,7 @@ func (t *Task) UnmarshalYAML(value *yaml.Node) (err error) {
 	return nil
 }
 
-func (t *Task) MarshalYAML() (interface{}, error) {
+func (t *Task) MarshalYAML() (any, error) {
 	// General task data
 	node := &yaml.Node{}
 	if err := node.Encode(*t); err != nil {
@@ -215,7 +215,7 @@ func (t *Task) MarshalYAML() (interface{}, error) {
 
 func (t *Task) Run(vars map[string]any) (data OrderedMap, err error) {
 	if len(t.Block) > 0 {
-		if t.Name != "" {
+		if !t.Name.IsEmpty() {
 			log.Warnf("Executing task block '%s'", t.Name)
 		}
 		for _, task := range t.Block {
@@ -334,10 +334,10 @@ func (t *Task) Run(vars map[string]any) (data OrderedMap, err error) {
 }
 
 func (t *Task) IsRemote(vars map[string]any) bool {
-	if t.Delegate_to == "localhost" {
+	if t.Delegate_to.Val() == "localhost" {
 		return false
 	}
-	if t.Delegate_to == "" {
+	if t.Delegate_to.Val() == "" {
 		// Refer to the variables
 		if val, ok := vars["ansible_connection"]; ok && val.(string) == "local" || !ok {
 			return false
